@@ -1,0 +1,5 @@
+opencv-python
+easyocr
+numpy
+tqdm
+tkinterdnd2
