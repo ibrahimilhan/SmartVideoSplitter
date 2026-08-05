@@ -98,7 +98,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
             inner.sort(key=lambda x: x[1], reverse=True)
             
             if len(inner) < expected_cuts:
-                print(f"  [UYARI] {expected_q_count} soru istendi ama sadece {len(inner)+1} gercekci gecis bulunabildi!")
+                print(f"  [UYARI] {expected_q_count} parça istendi ama sadece {len(inner)+1} gercekci gecis bulunabildi!")
                 print(f"  [UYARI] Gereksiz kesimleri onlemek icin kalanlar yoksayildi.")
             
             inner = inner[:expected_cuts]

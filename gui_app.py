@@ -11,7 +11,7 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 # Modulleri ice aktaralim
 from src.scanner import scan_and_build
 from src.cutter import cut_video_segment
-from src.gallery_maker import create_gallery
+
 
 # ========== RENK PALETI ==========
 COLORS = {
@@ -190,7 +190,7 @@ class SmartVideoSplitterApp:
                   command=self.browse_folder).pack(side=tk.LEFT, padx=(0, 16))
         
         # Soru sayisi giris alani
-        lbl_q = tk.Label(btn_frame, text="Beklenen Soru Sayısı:", font=self.font_body_bold,
+        lbl_q = tk.Label(btn_frame, text="Beklenen Parça Sayısı:", font=self.font_body_bold,
                          fg=COLORS["text_secondary"], bg=COLORS["bg_dark"])
         lbl_q.pack(side=tk.LEFT, padx=(0, 4))
         
@@ -212,7 +212,7 @@ class SmartVideoSplitterApp:
         
         stat_data = [
             (self.stat_video_count, "Video", COLORS["accent"]),
-            (self.stat_question_count, "Soru Tespit", COLORS["success"]),
+            (self.stat_question_count, "Parça Tespit", COLORS["success"]),
             (self.stat_status, "Durum", COLORS["warning"]),
         ]
         
@@ -243,7 +243,7 @@ class SmartVideoSplitterApp:
             ("video_suresi",    "Video Süresi"),
             ("cozunurluk",      "Çözünürlük"),
             ("dosya_boyutu",    "Dosya Boyutu"),
-            ("soru_sayisi",     "Soru Sayısı"),
+            ("parca_sayisi",     "Parça Sayısı"),
             ("gecen_sure",      "Geçen Süre"),
             ("tahmini_kalan",   "Tahmini Kalan"),
             ("islem_hizi",      "İşlem Hızı"),
@@ -360,7 +360,7 @@ class SmartVideoSplitterApp:
         self._update_info("video_suresi", "—")
         self._update_info("cozunurluk", "—")
         self._update_info("dosya_boyutu", "—")
-        self._update_info("soru_sayisi", "0")
+        self._update_info("parca_sayisi", "0")
         
         # self.entry_q_count.delete(0, tk.END) # Kullanici deger girdiyse korunsun
         
@@ -480,10 +480,10 @@ class SmartVideoSplitterApp:
         
         if expected_q:
             self.stat_question_count.set(f"0 / {expected_q}")
-            self._update_info("soru_sayisi", f"0 / {expected_q}")
+            self._update_info("parca_sayisi", f"0 / {expected_q}")
         else:
             self.stat_question_count.set("0")
-            self._update_info("soru_sayisi", "0")
+            self._update_info("parca_sayisi", "0")
             
         self.stat_status.set("Başlatılıyor...")
         self.live_dot.configure(fg=COLORS["success"])
@@ -615,9 +615,9 @@ class SmartVideoSplitterApp:
             
             print(f"\n▸ [{idx}/{len(videos)}] {v_name}")
             if expected_q:
-                print(f"  ⏳ Adım 1/3 — Geçiş noktaları taranıyor (Beklenen: {expected_q} soru)...")
+                print(f"  ⏳ Adım 1/2 — Geçiş noktaları taranıyor (Beklenen: {expected_q} parça)...")
             else:
-                print(f"  ⏳ Adım 1/3 — Geçiş noktaları taranıyor (Otomatik tespit)...")
+                print(f"  ⏳ Adım 1/2 — Geçiş noktaları taranıyor (Otomatik tespit)...")
             
             video_start = time.time()
             
@@ -626,14 +626,14 @@ class SmartVideoSplitterApp:
                 
                 # Uyumsuzluk kontrolu
                 if realistic_q != expected_q:
-                    print(f"  [UYARI] {expected_q} soru istendi ancak {realistic_q} gercekci gecis tespit edildi.")
+                    print(f"  [UYARI] {expected_q} parça istendi ancak {realistic_q} gercekci gecis tespit edildi.")
                     msg = (
-                        f"'{v_name}' videosu için {expected_q} soru girdiniz ancak yapay zeka {realistic_q} adet gerçekçi geçiş efekti (soru) tespit etti.\n\n"
+                        f"'{v_name}' videosu için {expected_q} parça girdiniz ancak yapay zeka {realistic_q} adet gerçekçi geçiş efekti (parça) tespit etti.\n\n"
                         f"Nasıl devam etmek istersiniz?\n\n"
                         f"Dipnot: Eğer aradaki fark çok küçükse (örneğin 1-2 sayı), muhtemelen ufak bir efekt atlamasıdır, "
                         f"'Zorla Benim Sayıma Böl' diyerek işlemi kendi sayınızla yapabilirsiniz."
                     )
-                    ans = self._ask_user_action_sync("Soru Sayısı Uyumsuzluğu", msg)
+                    ans = self._ask_user_action_sync("Parça Sayısı Uyumsuzluğu", msg)
                     
                     if ans == "skip":
                         print(f"  [IPTAL] Kullanici onayi ile video atlandi.")
@@ -659,27 +659,23 @@ class SmartVideoSplitterApp:
             
             if expected_q:
                 self.stat_question_count.set(f"{total_questions} / {expected_q}")
-                self._update_info("soru_sayisi", f"{total_questions} / {expected_q}")
+                self._update_info("parca_sayisi", f"{total_questions} / {expected_q}")
             else:
                 self.stat_question_count.set(str(total_questions))
-                self._update_info("soru_sayisi", str(total_questions))
+                self._update_info("parca_sayisi", str(total_questions))
                 
             self.stat_status.set(f"Kesiliyor {idx}/{len(videos)}")
-            print(f"  ⏳ Adım 2/3 — {q_count} soru tespit edildi, parçalanıyor...")
+            print(f"  ⏳ Adım 2/2 — {q_count} parça tespit edildi, parçalanıyor...")
             
             for i, (start_time, end_time) in enumerate(cut_points):
                 q_dur = end_time - start_time
-                q_num_str = f"{i+1:02d}_soru"
+                q_num_str = f"{i+1:02d}_parca"
                 out_file = os.path.join(out_sub, f"{q_num_str}.mp4")
                 cut_video_segment(v, out_file, start_time, end_time)
                 
             print(f"  ✓ {v_name} tamamlandı.")
             
-            self.stat_status.set(f"Galeri {idx}/{len(videos)}")
-            print(f"  ⏳ Adım 3/3 — PNG galerisi hazırlanıyor...")
-            gallery_out = os.path.join(out_sub, "Cevap_Galerisi")
-            create_gallery(out_sub, gallery_out)
-            print(f"  ✓ Galeri hazır.")
+
             
             # Sure hesaplamalari
             video_elapsed = time.time() - video_start
@@ -713,7 +709,7 @@ class SmartVideoSplitterApp:
         print(f"  │  Toplam süre: {self._format_time(total_elapsed)}               │")
         print("  └─────────────────────────────────────────┘")
         
-        messagebox.showinfo("Tamamlandı", f"{len(videos)} video başarıyla parçalandı!\nToplam {total_questions} soru kesildi.\nSüre: {self._format_time(total_elapsed)}")
+        messagebox.showinfo("Tamamlandı", f"{len(videos)} video başarıyla parçalandı!\nToplam {total_questions} parça kesildi.\nSüre: {self._format_time(total_elapsed)}")
         self.open_folder(output_dir)
 
 if __name__ == "__main__":
