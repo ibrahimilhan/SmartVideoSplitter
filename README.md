@@ -4,7 +4,7 @@
 
 **Kurgucuların (Editörlerin) Saatlerini Çalan "Manuel Kesim" Angaryasına Son!** 🚀
 
-[![Version](https://img.shields.io/badge/Versiyon-v2.0_Cyberpunk-ff0055.svg)](#)
+[![Version](https://img.shields.io/badge/Versiyon-v2.0_Pro-ff0055.svg)](#)
 [![FFmpeg](https://img.shields.io/badge/Powered_by-FFmpeg-00f0ff.svg)](#)
 [![AI](https://img.shields.io/badge/AI-Smart_Detection-00ff99.svg)](#)
 
@@ -31,7 +31,7 @@ Siz kahvenizi yudumlarken; SVS'nin yapay zekası videonuzu piksellerine kadar ta
 * 💎 **Sıfır Kalite Kaybı (Lossless):** Videoları bir daha renderlamaz! FFmpeg Stream Copy teknolojisiyle kaliteyi asla bozmadan, mili-saniyeler içinde şimşek hızında jilet gibi keser.
 * 🔄 **Zaman Çizelgesi (Timestamp) Koruması:** Otomatik kesim programlarında hep yaşanan "videonun başı dondu ama ses geliyor" (negative timestamp) zafiyetleri SVS'nin özel algoritmasıyla (`-avoid_negative_ts`) tamamen engellenmiştir.
 * 📂 **Otomatik İsimlendirme & Düzenleme:** Kestiği onca parçayı klasörleyip `01_parca.mp4`, `02_parca.mp4` şeklinde düzenler. Size sadece bu dosyaları alıp kurguya (Timeline'a) atmak kalır!
-* 🎨 **Siberpunk / Stüdyo Arayüzü:** Göz yormayan, sürükle-bırak destekli, karanlık ve modern "Cyberpunk" temalı arayüzü sayesinde profesyonel hissettirir.
+* 🎨 **Karanlık / Stüdyo Arayüzü:** Göz yormayan, sürükle-bırak destekli, modern ve profesyonel stüdyo temalı arayüzü ile kurgu sürecinize uyum sağlar.
 
 ---
 
