@@ -12,7 +12,7 @@
 
 ---
 
-## 🤯 "Harbi mi lan?!" Dedirtecek O Teknoloji
+## 😲 Kurgucuları Kurtaran O Teknoloji
 
 Günde kaç saatinizi Premiere Pro veya DaVinci Resolve başında, videolardaki siyah ekranları (Fade to Black) arayıp `C` (Razor) tuşuyla tek tek kesmekle harcıyorsunuz? 
 
