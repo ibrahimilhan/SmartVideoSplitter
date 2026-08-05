@@ -25,7 +25,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
     gecis noktalarini (fade, sahne degisimi) tespit eder.
     Bu yontem ffmpeg blackdetect'ten cok daha guvenilirdir.
     """
-    print(f"  [TARAMA] {os.path.basename(video_path)} - Kaba tarama baslatildi...")
+    print(f"  [SCAN] {os.path.basename(video_path)} - Rough scan started...")
     
     tid = threading.get_ident()
     raw_file = f'frames_raw_{tid}.gray'
@@ -98,17 +98,17 @@ def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
             inner.sort(key=lambda x: x[1], reverse=True)
             
             if len(inner) < expected_cuts:
-                print(f"  [UYARI] {expected_q_count} parça istendi ama sadece {len(inner)+1} gercekci gecis bulunabildi!")
-                print(f"  [UYARI] Gereksiz kesimleri onlemek icin kalanlar yoksayildi.")
+                print(f"  [WARNING] {expected_q_count} parts expected, but only {len(inner)+1} realistic transitions found!")
+                print(f"  [WARNING] The rest were ignored to prevent unnecessary cuts.")
             
             inner = inner[:expected_cuts]
             # Tekrar zamana gore sirala
             inner.sort(key=lambda x: x[0])
             
-        print(f"  [TARAMA] {len(inner)} gecis noktasi bulundu.")
+        print(f"  [SCAN] {len(inner)} transition points found.")
         return inner, realistic_q_count
     
-    print(f"  [TARAMA] {len(inner)} gecis noktasi bulundu.")
+    print(f"  [SCAN] {len(inner)} transition points found.")
     return inner
 
 def refine_transitions(video_path: str, coarse_transitions: list, duration: float) -> list:
@@ -119,7 +119,7 @@ def refine_transitions(video_path: str, coarse_transitions: list, duration: floa
     if not coarse_transitions:
         return []
         
-    print(f"  [HASSAS] Gecisler hassas taramaya aliniyor...")
+    print(f"  [PRECISE] Transitions are being precisely scanned...")
     
     refined = []
     for idx, (coarse_sec, coarse_score) in enumerate(coarse_transitions):
@@ -256,7 +256,7 @@ def scan_and_build(video_path: str, expected_q_count: int = None) -> list:
     """
     duration = get_video_duration(video_path)
     if duration == 0:
-        print(f"  [HATA] {video_path} suresi okunamadi!")
+        print(f"  [ERROR] {video_path} duration could not be read!")
         return []
     
     # 1. Kaba tarama (1 FPS piksel fark analizi)
@@ -277,7 +277,7 @@ def scan_and_build(video_path: str, expected_q_count: int = None) -> list:
     # 5. Kisa parcalari birlestir
     questions = merge_overlaps(questions)
     
-    print(f"  [SONUC] {len(questions)} soru parcasi olusturuldu.")
+    print(f"  [RESULT] {len(questions)} parts created.")
     
     if expected_q_count is not None:
         return questions, realistic_q_count

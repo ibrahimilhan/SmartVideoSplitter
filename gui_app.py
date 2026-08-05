@@ -127,7 +127,7 @@ class SmartVideoSplitterApp:
         title_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # Alt baslik
-        tk.Label(title_frame, text="Eğitim videolarını yapay zeka ile otomatik parçalayın",
+        tk.Label(title_frame, text="Automatically split educational videos with AI",
                  font=("Segoe UI", 12), fg=COLORS["accent2"],
                  bg=COLORS["bg_dark"]).pack(anchor="w", pady=(4, 12))
                  
@@ -152,14 +152,13 @@ class SmartVideoSplitterApp:
         tk.Label(warn_header, text="⚠",
                  font=("Segoe UI", 14), fg=COLORS["warning"],
                  bg=COLORS["bg_card"]).pack(side=tk.LEFT, padx=(0, 6))
-        tk.Label(warn_header, text="Başlamadan Önce",
+        tk.Label(warn_header, text="Before You Start",
                  font=self.font_warning_title, fg=COLORS["warning"],
                  bg=COLORS["bg_card"]).pack(side=tk.LEFT)
         
         warnings = [
-            ("FFmpeg", "Sisteminizde FFmpeg kurulu olmalıdır.", True),
-            ("Geçiş Efekti", "Videolarda sorular arası 'Fade to Black' geçişi zorunludur.", False),
-            ("Cevap Galerisi", "Her sorunun son saniyesinin (çözümün) fotoğrafı otomatik kaydedilir.", False)
+            ("FFmpeg", "FFmpeg must be installed on your system.", True),
+            ("Transition Effect", "A 'Fade to Black' transition between parts is mandatory.", False)
         ]
         for tag, desc, has_btn in warnings:
             row = tk.Frame(warn_inner, bg=COLORS["bg_card"])
@@ -171,7 +170,7 @@ class SmartVideoSplitterApp:
             tk.Label(row, text=f" — {desc}", font=self.font_body, fg=COLORS["text_secondary"],
                      bg=COLORS["bg_card"]).pack(side=tk.LEFT)
             if has_btn:
-                tk.Button(row, text="Nasıl Kurulur?", font=self.font_small, bg=COLORS["accent"],
+                tk.Button(row, text="How to Install?", font=self.font_small, bg=COLORS["accent"],
                           fg="white", relief=tk.FLAT, cursor="hand2", padx=6, pady=0,
                           command=self._show_ffmpeg_install).pack(side=tk.LEFT, padx=(10, 0))
 
@@ -179,18 +178,18 @@ class SmartVideoSplitterApp:
         btn_frame = tk.Frame(main_container, bg=COLORS["bg_dark"])
         btn_frame.pack(fill=tk.X, pady=(0, 12))
         
-        tk.Button(btn_frame, text="📂 Video Dosyası Seç", bg=COLORS["accent2"], fg="white",
+        tk.Button(btn_frame, text="📂 Select Video File", bg=COLORS["accent2"], fg="white",
                   font=self.font_body_bold, padx=14, pady=6, relief=tk.FLAT, cursor="hand2",
                   activebackground=COLORS["accent"], activeforeground="white",
                   command=self.browse_files).pack(side=tk.LEFT, padx=(0, 8))
         
-        tk.Button(btn_frame, text="📁 Klasör Seç", bg=COLORS["accent2"], fg="white",
+        tk.Button(btn_frame, text="📁 Select Folder", bg=COLORS["accent2"], fg="white",
                   font=self.font_body_bold, padx=14, pady=6, relief=tk.FLAT, cursor="hand2",
                   activebackground=COLORS["accent"], activeforeground="white",
                   command=self.browse_folder).pack(side=tk.LEFT, padx=(0, 16))
         
         # Soru sayisi giris alani
-        lbl_q = tk.Label(btn_frame, text="Beklenen Parça Sayısı:", font=self.font_body_bold,
+        lbl_q = tk.Label(btn_frame, text="Expected Parts:", font=self.font_body_bold,
                          fg=COLORS["text_secondary"], bg=COLORS["bg_dark"])
         lbl_q.pack(side=tk.LEFT, padx=(0, 4))
         
@@ -199,7 +198,7 @@ class SmartVideoSplitterApp:
                                       insertbackground=COLORS["text_primary"])
         self.entry_q_count.pack(side=tk.LEFT, ipady=4, padx=(0, 8))
         
-        tk.Label(btn_frame, text="(Opsiyonel)", font=self.font_small,
+        tk.Label(btn_frame, text="(Optional)", font=self.font_small,
                  fg=COLORS["text_muted"], bg=COLORS["bg_dark"]).pack(side=tk.LEFT)
 
         # ===== ISTATISTIK KARTLARI =====
@@ -208,12 +207,12 @@ class SmartVideoSplitterApp:
         
         self.stat_video_count = tk.StringVar(value="0")
         self.stat_question_count = tk.StringVar(value="0")
-        self.stat_status = tk.StringVar(value="Bekliyor")
+        self.stat_status = tk.StringVar(value="Waiting")
         
         stat_data = [
             (self.stat_video_count, "Video", COLORS["accent"]),
-            (self.stat_question_count, "Parça Tespit", COLORS["success"]),
-            (self.stat_status, "Durum", COLORS["warning"]),
+            (self.stat_question_count, "Part Detection", COLORS["success"]),
+            (self.stat_status, "Status", COLORS["warning"]),
         ]
         
         for i, (var, label, color) in enumerate(stat_data):
@@ -233,20 +232,20 @@ class SmartVideoSplitterApp:
         info_outer, info_inner = self.create_rounded_frame(bottom_frame, COLORS["bg_card"], pad=12)
         info_outer.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
         
-        tk.Label(info_inner, text="📊 Video Bilgileri", font=self.font_body_bold,
+        tk.Label(info_inner, text="📊 Video Information", font=self.font_body_bold,
                  fg=COLORS["text_primary"], bg=COLORS["bg_card"]).pack(anchor="w", pady=(0, 10))
         
         # Info panel degiskenleri
         self.info_vars = {}
         info_fields = [
-            ("video_adi",       "Video Adı"),
-            ("video_suresi",    "Video Süresi"),
-            ("cozunurluk",      "Çözünürlük"),
-            ("dosya_boyutu",    "Dosya Boyutu"),
-            ("parca_sayisi",     "Parça Sayısı"),
-            ("gecen_sure",      "Geçen Süre"),
-            ("tahmini_kalan",   "Tahmini Kalan"),
-            ("islem_hizi",      "İşlem Hızı"),
+            ("video_adi",       "Video Name"),
+            ("video_suresi",    "Video Duration"),
+            ("cozunurluk",      "Resolution"),
+            ("dosya_boyutu",    "File Size"),
+            ("parca_sayisi",     "Part Count"),
+            ("gecen_sure",      "Elapsed Time"),
+            ("tahmini_kalan",   "Estimated Remaining"),
+            ("islem_hizi",      "Processing Speed"),
         ]
         
         for key, label in info_fields:
@@ -273,7 +272,7 @@ class SmartVideoSplitterApp:
         self.live_dot = tk.Label(left_header, text="●", font=("Segoe UI", 8),
                                  fg=COLORS["text_muted"], bg=COLORS["bg_card_alt"])
         self.live_dot.pack(side=tk.LEFT, padx=(0, 5))
-        tk.Label(left_header, text="İşlem Çıktısı", font=self.font_body_bold,
+        tk.Label(left_header, text="Process Log", font=self.font_body_bold,
                  fg=COLORS["text_secondary"], bg=COLORS["bg_card_alt"]).pack(side=tk.LEFT)
         
         self.log_area = tk.Text(log_inner, bg=COLORS["log_bg"], fg=COLORS["log_fg"],
@@ -296,15 +295,15 @@ class SmartVideoSplitterApp:
         
         tk.Label(overlay_content, text="📥", font=("Segoe UI", 28),
                  bg=COLORS["overlay_bg"], fg="white").pack()
-        tk.Label(overlay_content, text="VİDEOYU BURAYA BIRAKIN",
+        tk.Label(overlay_content, text="DROP VIDEO HERE",
                  font=("Segoe UI", 18, "bold"), bg=COLORS["overlay_bg"], fg="white").pack(pady=(4, 0))
-        tk.Label(overlay_content, text="MP4 dosyası veya klasör sürükleyin",
+        tk.Label(overlay_content, text="Drag and drop MP4 files or a folder",
                  font=self.font_subtitle, bg=COLORS["overlay_bg"], fg="#aaaaaa").pack(pady=(4, 0))
         
         # Hosgeldin mesaji
         self.log_area.configure(state="normal")
-        self.log_area.insert(tk.END, "SmartVideoSplitter hazır.\n")
-        self.log_area.insert(tk.END, "Bir video veya klasör sürükleyip bu pencerenin üzerine bırakın.\n\n")
+        self.log_area.insert(tk.END, "SmartVideoSplitter is ready.\n")
+        self.log_area.insert(tk.END, "Drag and drop a video or folder onto this window.\n\n")
         self.log_area.configure(state="disabled")
 
     def _ask_user_action_sync(self, title, message):
@@ -332,15 +331,15 @@ class SmartVideoSplitterApp:
                 top.destroy()
                 event.set()
                 
-            tk.Button(btn_frame, text="Zorla Benim Sayıma Böl", bg=COLORS["warning"], fg="white", 
+            tk.Button(btn_frame, text="Force Split by My Count", bg=COLORS["warning"], fg="white", 
                       font=self.font_body_bold, padx=8, pady=4, relief=tk.FLAT, cursor="hand2",
                       command=lambda: set_ans("force")).pack(side=tk.LEFT, padx=5)
                       
-            tk.Button(btn_frame, text="Yapay Zekaya Göre Böl", bg=COLORS["success"], fg="white", 
+            tk.Button(btn_frame, text="Split by AI Count", bg=COLORS["success"], fg="white", 
                       font=self.font_body_bold, padx=8, pady=4, relief=tk.FLAT, cursor="hand2",
                       command=lambda: set_ans("ai")).pack(side=tk.LEFT, padx=5)
                       
-            tk.Button(btn_frame, text="Videoyu Atla", bg=COLORS["bg_card"], fg="white", 
+            tk.Button(btn_frame, text="Skip Video", bg=COLORS["bg_card"], fg="white", 
                       font=self.font_body_bold, padx=8, pady=4, relief=tk.FLAT, cursor="hand2",
                       command=lambda: set_ans("skip")).pack(side=tk.LEFT, padx=5)
             
@@ -354,7 +353,7 @@ class SmartVideoSplitterApp:
         """Arayuzdeki statulari ve loglari varsayilan hale getirir."""
         self.stat_video_count.set("0")
         self.stat_question_count.set("0")
-        self.stat_status.set("Bekliyor")
+        self.stat_status.set("Waiting")
         
         self._update_info("video_adi", "—")
         self._update_info("video_suresi", "—")
@@ -372,14 +371,14 @@ class SmartVideoSplitterApp:
         """Kullaniciya FFmpeg kurulumu icin yardimci olacak CMD penceresini acar."""
         msg = (
             "echo =================================================== & "
-            "echo FFMPEG KURULUM REHBERI & "
+            "echo FFMPEG INSTALLATION GUIDE & "
             "echo =================================================== & "
             "echo. & "
-            "echo FFmpeg'i kurmak icin asagidaki komutu kopyalayip buraya yapistirin ve ENTER'a basin: & "
+            "echo To install FFmpeg, copy the following command, paste it here, and press ENTER: & "
             "echo. & "
             "echo winget install Gyan.FFmpeg & "
             "echo. & "
-            "echo Kurulum bittikten sonra CMD penceresini kapatabilirsiniz."
+            "echo You can close this CMD window after the installation is complete."
         )
         os.system(f'start cmd.exe /k "{msg}"')
 
@@ -423,7 +422,7 @@ class SmartVideoSplitterApp:
         self.overlay.place_forget()
         
         if self.is_processing:
-            messagebox.showwarning("Meşgul", "Zaten bir işlem devam ediyor. Lütfen bitmesini bekleyin.")
+            messagebox.showwarning("Busy", "A process is already running. Please wait for it to finish.")
             return
         
         paths = self.root.tk.splitlist(event.data)
@@ -440,11 +439,11 @@ class SmartVideoSplitterApp:
     def browse_files(self):
         """Dosya secme penceresiyle MP4 dosyalari sec."""
         if self.is_processing:
-            messagebox.showwarning("Meşgul", "Zaten bir işlem devam ediyor.")
+            messagebox.showwarning("Busy", "Zaten bir işlem devam ediyor.")
             return
         files = filedialog.askopenfilenames(
-            title="Kesilecek Video Dosyalarını Seçin",
-            filetypes=[("MP4 Videoları", "*.mp4"), ("Tüm Dosyalar", "*.*")]
+            title="Select Video Files to Split",
+            filetypes=[("MP4 Videos", "*.mp4"), ("All Files", "*.*")]
         )
         if files:
             self._start_processing(list(files))
@@ -452,9 +451,9 @@ class SmartVideoSplitterApp:
     def browse_folder(self):
         """Klasor secme penceresiyle bir klasordeki tum MP4'leri sec."""
         if self.is_processing:
-            messagebox.showwarning("Meşgul", "Zaten bir işlem devam ediyor.")
+            messagebox.showwarning("Busy", "Zaten bir işlem devam ediyor.")
             return
-        folder = filedialog.askdirectory(title="Videoların Bulunduğu Klasörü Seçin")
+        folder = filedialog.askdirectory(title="Select Folder Containing Videos")
         if folder:
             videos = glob.glob(os.path.join(folder, "*.mp4"))
             self._start_processing(videos)
@@ -462,7 +461,7 @@ class SmartVideoSplitterApp:
     def _start_processing(self, videos_to_process):
         """Ortak islemi baslatan fonksiyon (surukle-birak ve butonlar icin)."""
         if not videos_to_process:
-            messagebox.showwarning("Uyarı", "Geçerli bir MP4 dosyası bulunamadı!")
+            messagebox.showwarning("Warning", "No valid MP4 file found!")
             return
             
         self._reset_ui()
@@ -474,7 +473,7 @@ class SmartVideoSplitterApp:
             expected_q = int(q_text)
             
         base_dir = os.path.dirname(videos_to_process[0])
-        output_dir = os.path.join(base_dir, "Kesilmis_Videolar")
+        output_dir = os.path.join(base_dir, "Split_Videos")
         
         self.stat_video_count.set(str(len(videos_to_process)))
         
@@ -485,7 +484,7 @@ class SmartVideoSplitterApp:
             self.stat_question_count.set("0")
             self._update_info("parca_sayisi", "0")
             
-        self.stat_status.set("Başlatılıyor...")
+        self.stat_status.set("Starting...")
         self.live_dot.configure(fg=COLORS["success"])
         self._blink_active = True
         self._blink_dot()
@@ -496,7 +495,7 @@ class SmartVideoSplitterApp:
         try:
             os.startfile(path)
         except Exception as e:
-            print(f"Klasör açılamadı: {e}")
+            print(f"Could not open folder: {e}")
 
     def _blink_dot(self):
         if not self._blink_active:
@@ -509,14 +508,14 @@ class SmartVideoSplitterApp:
     def _format_time(self, seconds):
         """Saniyeyi okunaklı formata cevir."""
         if seconds < 60:
-            return f"{int(seconds)} sn"
+            return f"{int(seconds)} sec"
         elif seconds < 3600:
             m, s = divmod(int(seconds), 60)
-            return f"{m} dk {s} sn"
+            return f"{m} min {s} sec"
         else:
             h, rem = divmod(int(seconds), 3600)
             m, s = divmod(rem, 60)
-            return f"{h} sa {m} dk"
+            return f"{h} hr {m} dk"
 
     def _format_size(self, bytes_size):
         """Byte'i okunaklı formata cevir."""
@@ -564,8 +563,8 @@ class SmartVideoSplitterApp:
         try:
             self._run_process_inner(videos, output_dir, expected_q)
         except Exception as e:
-            print(f"\n  [KRİTİK HATA] İşlem sırasında bir hata oluştu: {e}")
-            self.stat_status.set("❌ Hata")
+            print(f"\n  [CRITICAL ERROR] An error occurred during processing: {e}")
+            self.stat_status.set("❌ Error")
         finally:
             self.is_processing = False
             self.live_dot.configure(fg=COLORS["text_muted"])
@@ -581,7 +580,7 @@ class SmartVideoSplitterApp:
             d, _, _ = self._get_video_meta(v)
             total_duration += d
         
-        self._update_info("video_adi", f"{len(videos)} dosya")
+        self._update_info("video_adi", f"{len(videos)} files")
         self._update_info("video_suresi", self._format_time(total_duration))
         
         # Toplam dosya boyutu
@@ -590,7 +589,7 @@ class SmartVideoSplitterApp:
         
         print("\n")
         print("  ┌─────────────────────────────────────────┐")
-        print(f"  │  🚀 İŞLEM BAŞLATILDI                    │")
+        print(f"  │  🚀 PROCESS STARTED                    │")
         print(f"  │  {len(videos)} video ({self._format_time(total_duration)})          │")
         print("  └─────────────────────────────────────────┘")
         print()
@@ -611,13 +610,13 @@ class SmartVideoSplitterApp:
             self._update_info("cozunurluk", f"{vid_w}x{vid_h}" if vid_w else "—")
             self._update_info("dosya_boyutu", self._format_size(vid_size))
             
-            self.stat_status.set(f"Taranıyor {idx}/{len(videos)}")
+            self.stat_status.set(f"Scanning {idx}/{len(videos)}")
             
             print(f"\n▸ [{idx}/{len(videos)}] {v_name}")
             if expected_q:
-                print(f"  ⏳ Adım 1/2 — Geçiş noktaları taranıyor (Beklenen: {expected_q} parça)...")
+                print(f"  ⏳ Step 1/2 — Scanning for transitions (Expected: {expected_q} parça)...")
             else:
-                print(f"  ⏳ Adım 1/2 — Geçiş noktaları taranıyor (Otomatik tespit)...")
+                print(f"  ⏳ Step 1/2 — Scanning for transitions (Auto-detect)...")
             
             video_start = time.time()
             
@@ -626,31 +625,31 @@ class SmartVideoSplitterApp:
                 
                 # Uyumsuzluk kontrolu
                 if realistic_q != expected_q:
-                    print(f"  [UYARI] {expected_q} parça istendi ancak {realistic_q} gercekci gecis tespit edildi.")
+                    print(f"  [UYARI] {expected_q} parça istendi ancak {realistic_q} realistic transitions detected.")
                     msg = (
                         f"'{v_name}' videosu için {expected_q} parça girdiniz ancak yapay zeka {realistic_q} adet gerçekçi geçiş efekti (parça) tespit etti.\n\n"
                         f"Nasıl devam etmek istersiniz?\n\n"
                         f"Dipnot: Eğer aradaki fark çok küçükse (örneğin 1-2 sayı), muhtemelen ufak bir efekt atlamasıdır, "
-                        f"'Zorla Benim Sayıma Böl' diyerek işlemi kendi sayınızla yapabilirsiniz."
+                        f"'Force Split by My Count' diyerek işlemi kendi sayınızla yapabilirsiniz."
                     )
-                    ans = self._ask_user_action_sync("Parça Sayısı Uyumsuzluğu", msg)
+                    ans = self._ask_user_action_sync("Part Count Uyumsuzluğu", msg)
                     
                     if ans == "skip":
-                        print(f"  [IPTAL] Kullanici onayi ile video atlandi.")
+                        print(f"  [IPTAL] Video skipped by user.")
                         continue
                     elif ans == "ai":
-                        print(f"  [YAPAY ZEKA] Yapay zekanin buldugu {realistic_q} soru sayisi baz alinarak yeniden taranoyor...")
-                        self.stat_status.set(f"Yeniden Taranıyor {idx}/{len(videos)}")
+                        print(f"  [YAPAY ZEKA] Scanning again based on AI count: {realistic_q} parts sayisi baz alinarak yeniden taranoyor...")
+                        self.stat_status.set(f"Yeniden Scanning {idx}/{len(videos)}")
                         cut_points = scan_and_build(v)
                         expected_q = realistic_q  # UI'daki hedef sayiyi guncelle
                     elif ans == "force":
-                        print(f"  [ZORLA] Kullanici onayi ile video {expected_q} parcaya bolunuyor.")
+                        print(f"  [ZORLA] Video forcibly split into {expected_q} parcaya bolunuyor.")
                         # mevcut cut_points oldugu gibi kalir
             else:
                 cut_points = scan_and_build(v)
             
             if not cut_points or len(cut_points) <= 1:
-                print("  Geçiş bulunamadı, atlanıyor.")
+                print("  No transitions found, skipping.")
                 processed_duration += vid_dur
                 continue
                 
@@ -664,8 +663,8 @@ class SmartVideoSplitterApp:
                 self.stat_question_count.set(str(total_questions))
                 self._update_info("parca_sayisi", str(total_questions))
                 
-            self.stat_status.set(f"Kesiliyor {idx}/{len(videos)}")
-            print(f"  ⏳ Adım 2/2 — {q_count} parça tespit edildi, parçalanıyor...")
+            self.stat_status.set(f"Cutting {idx}/{len(videos)}")
+            print(f"  ⏳ Step 2/2 — {q_count} parts detected, splitting...")
             
             for i, (start_time, end_time) in enumerate(cut_points):
                 q_dur = end_time - start_time
@@ -673,7 +672,7 @@ class SmartVideoSplitterApp:
                 out_file = os.path.join(out_sub, f"{q_num_str}.mp4")
                 cut_video_segment(v, out_file, start_time, end_time)
                 
-            print(f"  ✓ {v_name} tamamlandı.")
+            print(f"  ✓ {v_name} completed.")
             
 
             
@@ -684,32 +683,32 @@ class SmartVideoSplitterApp:
             
             self._update_info("gecen_sure", self._format_time(total_elapsed))
             
-            # Islem hizi: 1 dk video = kac saniye islem
+            # Islem hizi: 1 min video = kac saniye islem
             if processed_duration > 0:
                 speed_ratio = total_elapsed / processed_duration
-                self._update_info("islem_hizi", f"1 dk video = {speed_ratio * 60:.0f} sn")
+                self._update_info("islem_hizi", f"1 min video = {speed_ratio * 60:.0f} sec")
                 
                 remaining_dur = total_duration - processed_duration
                 est_remaining = remaining_dur * speed_ratio
                 self._update_info("tahmini_kalan", f"~{self._format_time(est_remaining)}")
-                print(f"  ⏱️ Bu video: {self._format_time(video_elapsed)} | Tahmini kalan: ~{self._format_time(est_remaining)}")
+                print(f"  ⏱️ This video: {self._format_time(video_elapsed)} | Estimated remaining: ~{self._format_time(est_remaining)}")
             print()
             
-        self.stat_status.set("✅ Tamamlandı")
+        self.stat_status.set("✅ Completed")
         
         total_elapsed = time.time() - process_start
         self._update_info("gecen_sure", self._format_time(total_elapsed))
-        self._update_info("tahmini_kalan", "Bitti!")
-        self._update_info("video_adi", "✅ Tamamlandı")
+        self._update_info("tahmini_kalan", "Done!")
+        self._update_info("video_adi", "✅ Completed")
         
         print()
         print("  ┌─────────────────────────────────────────┐")
-        print(f"  │  ✅ TÜM İŞLEMLER TAMAMLANDI!            │")
-        print(f"  │  {len(videos)} video → {total_questions} soru           │")
-        print(f"  │  Toplam süre: {self._format_time(total_elapsed)}               │")
+        print(f"  │  ✅ ALL PROCESSES COMPLETED!            │")
+        print(f"  │  {len(videos)} videos → {total_questions} parts           │")
+        print(f"  │  Total time: {self._format_time(total_elapsed)}               │")
         print("  └─────────────────────────────────────────┘")
         
-        messagebox.showinfo("Tamamlandı", f"{len(videos)} video başarıyla parçalandı!\nToplam {total_questions} parça kesildi.\nSüre: {self._format_time(total_elapsed)}")
+        messagebox.showinfo("Completed", f"{len(videos)} videos successfully split!\nTotal {total_questions} parts cut.\nTime: {self._format_time(total_elapsed)}")
         self.open_folder(output_dir)
 
 if __name__ == "__main__":
