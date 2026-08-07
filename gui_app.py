@@ -285,9 +285,9 @@ class SmartVideoSplitterApp:
             tk.Label(row, text=f" — {desc}", font=self.font_body, fg=COLORS["text_secondary"],
                      bg=COLORS["bg_card"]).pack(side=tk.LEFT)
             if has_btn:
-                tk.Button(row, text="How to Install?", font=self.font_small, bg=COLORS["accent"],
-                          fg="white", relief=tk.FLAT, cursor="hand2", padx=6, pady=0,
-                          command=self._show_ffmpeg_install).pack(side=tk.LEFT, padx=(10, 0))
+                CyberButton(row, text="How to Install?", command=self._show_ffmpeg_install, 
+                            bg_color=COLORS["accent"], hover_color=COLORS["accent_hover"], 
+                            font=self.font_small, width=120, height=24).pack(side=tk.LEFT, padx=(10, 0))
 
         # ===== VIDEO SECME BUTONLARI =====
         btn_frame = tk.Frame(main_container, bg=COLORS["bg_dark"])
@@ -430,7 +430,7 @@ class SmartVideoSplitterApp:
         def _ask():
             top = tk.Toplevel(self.root)
             top.title(title)
-            top.geometry("480x280")
+            top.geometry("560x280")
             top.configure(bg=COLORS["bg_dark"])
             top.attributes('-topmost', True)
             top.grab_set()
@@ -446,17 +446,17 @@ class SmartVideoSplitterApp:
                 top.destroy()
                 event.set()
                 
-            tk.Button(btn_frame, text="Force Split by My Count", bg=COLORS["warning"], fg="white", 
-                      font=self.font_body_bold, padx=8, pady=4, relief=tk.FLAT, cursor="hand2",
-                      command=lambda: set_ans("force")).pack(side=tk.LEFT, padx=5)
+            CyberButton(btn_frame, text="Force Split (My Count)", command=lambda: set_ans("force"), 
+                        bg_color=COLORS["warning"], hover_color="#f2c130", 
+                        font=self.font_body_bold, width=190, height=36).pack(side=tk.LEFT, padx=5)
                       
-            tk.Button(btn_frame, text="Split by AI Count", bg=COLORS["success"], fg="white", 
-                      font=self.font_body_bold, padx=8, pady=4, relief=tk.FLAT, cursor="hand2",
-                      command=lambda: set_ans("ai")).pack(side=tk.LEFT, padx=5)
+            CyberButton(btn_frame, text="Split by AI Count", command=lambda: set_ans("ai"), 
+                        bg_color=COLORS["success"], hover_color="#36cf8a", 
+                        font=self.font_body_bold, width=160, height=36).pack(side=tk.LEFT, padx=5)
                       
-            tk.Button(btn_frame, text="Skip Video", bg=COLORS["bg_card"], fg="white", 
-                      font=self.font_body_bold, padx=8, pady=4, relief=tk.FLAT, cursor="hand2",
-                      command=lambda: set_ans("skip")).pack(side=tk.LEFT, padx=5)
+            CyberButton(btn_frame, text="Skip Video", command=lambda: set_ans("skip"), 
+                        bg_color=COLORS["bg_card_alt"], hover_color=COLORS["accent"], 
+                        font=self.font_body_bold, width=120, height=36).pack(side=tk.LEFT, padx=5)
             
             top.protocol("WM_DELETE_WINDOW", lambda: set_ans("skip"))
             
