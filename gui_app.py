@@ -644,25 +644,25 @@ class SmartVideoSplitterApp:
                 
                 # Uyumsuzluk kontrolu
                 if realistic_q != expected_q:
-                    print(f"  [UYARI] {expected_q} parça istendi ancak {realistic_q} realistic transitions detected.")
+                    print(f"  [WARNING] {expected_q} parts requested but {realistic_q} realistic transitions detected.")
                     msg = (
-                        f"'{v_name}' videosu için {expected_q} parça girdiniz ancak yapay zeka {realistic_q} adet gerçekçi geçiş efekti (parça) tespit etti.\n\n"
-                        f"Nasıl devam etmek istersiniz?\n\n"
-                        f"Dipnot: Eğer aradaki fark çok küçükse (örneğin 1-2 sayı), muhtemelen ufak bir efekt atlamasıdır, "
-                        f"'Force Split by My Count' diyerek işlemi kendi sayınızla yapabilirsiniz."
+                        f"You expected {expected_q} parts for '{v_name}', but the AI detected {realistic_q} realistic transition effects (parts).\n\n"
+                        f"How would you like to proceed?\n\n"
+                        f"Note: If the difference is very small (e.g., 1-2), it's likely a minor skipped effect. "
+                        f"You can choose 'Force Split by My Count' to proceed with your number."
                     )
-                    ans = self._ask_user_action_sync("Part Count Uyumsuzluğu", msg)
+                    ans = self._ask_user_action_sync("Part Count Mismatch", msg)
                     
                     if ans == "skip":
-                        print(f"  [IPTAL] Video skipped by user.")
+                        print(f"  [CANCELLED] Video skipped by user.")
                         continue
                     elif ans == "ai":
-                        print(f"  [YAPAY ZEKA] Scanning again based on AI count: {realistic_q} parts sayisi baz alinarak yeniden taranoyor...")
-                        self.stat_status.set(f"Yeniden Scanning {idx}/{len(videos)}")
+                        print(f"  [AI] Rescanning based on AI count: {realistic_q} parts...")
+                        self.stat_status.set(f"Rescanning {idx}/{len(videos)}")
                         cut_points = scan_and_build(v)
                         expected_q = realistic_q  # UI'daki hedef sayiyi guncelle
                     elif ans == "force":
-                        print(f"  [ZORLA] Video forcibly split into {expected_q} parcaya bolunuyor.")
+                        print(f"  [FORCE] Video forcibly split into {expected_q} parts.")
                         # mevcut cut_points oldugu gibi kalir
             else:
                 cut_points = scan_and_build(v)
