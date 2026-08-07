@@ -76,7 +76,7 @@ class SmartVideoSplitterApp:
         self.font_overlay = ("Consolas", 32, "bold")
         self.font_warning_title = ("Segoe UI", 11, "bold")
         self.font_small = ("Segoe UI", 9)
-        self.font_stat = ("Consolas", 28, "bold") # Rakamlar icin teknolojik font
+        self.font_stat = ("Courier New", 36, "bold") # Rakamlar icin teknolojik font
         self.font_stat_label = ("Segoe UI", 9)
 
     def create_rounded_frame(self, parent, bg_color, pad=15):
@@ -87,6 +87,19 @@ class SmartVideoSplitterApp:
         return outer, inner
 
     def setup_ui(self):
+        # SCROLLBAR STILI
+        style = ttk.Style()
+        if "clam" in style.theme_names():
+            style.theme_use('clam')
+        style.configure("Cyber.Vertical.TScrollbar",
+                        background=COLORS["border"],
+                        troughcolor=COLORS["log_bg"],
+                        bordercolor=COLORS["log_bg"],
+                        arrowcolor=COLORS["accent2"],
+                        relief="flat")
+        style.map("Cyber.Vertical.TScrollbar",
+                  background=[('active', COLORS["accent"])])
+                  
         # BANNER (Gorsel Sölen) - Ekranin kenarlarina degmesi icin dogrudan root'a ekliyoruz
         banner_path = os.path.join("assets", "banner.jpg")
         if os.path.exists(banner_path):
@@ -178,15 +191,21 @@ class SmartVideoSplitterApp:
         btn_frame = tk.Frame(main_container, bg=COLORS["bg_dark"])
         btn_frame.pack(fill=tk.X, pady=(0, 12))
         
-        tk.Button(btn_frame, text="📂 Select Video File", bg=COLORS["accent2"], fg="white",
+        btn_file = tk.Button(btn_frame, text="🎬 Select Video File", bg=COLORS["accent2"], fg="white",
                   font=self.font_body_bold, padx=14, pady=6, relief=tk.FLAT, cursor="hand2",
                   activebackground=COLORS["accent"], activeforeground="white",
-                  command=self.browse_files).pack(side=tk.LEFT, padx=(0, 8))
+                  command=self.browse_files)
+        btn_file.pack(side=tk.LEFT, padx=(0, 8))
+        btn_file.bind("<Enter>", lambda e: btn_file.config(bg=COLORS["accent"]))
+        btn_file.bind("<Leave>", lambda e: btn_file.config(bg=COLORS["accent2"]))
         
-        tk.Button(btn_frame, text="📁 Select Folder", bg=COLORS["accent2"], fg="white",
+        btn_folder = tk.Button(btn_frame, text="📁 Select Folder", bg=COLORS["accent2"], fg="white",
                   font=self.font_body_bold, padx=14, pady=6, relief=tk.FLAT, cursor="hand2",
                   activebackground=COLORS["accent"], activeforeground="white",
-                  command=self.browse_folder).pack(side=tk.LEFT, padx=(0, 16))
+                  command=self.browse_folder)
+        btn_folder.pack(side=tk.LEFT, padx=(0, 16))
+        btn_folder.bind("<Enter>", lambda e: btn_folder.config(bg=COLORS["accent"]))
+        btn_folder.bind("<Leave>", lambda e: btn_folder.config(bg=COLORS["accent2"]))
         
         # Soru sayisi giris alani
         lbl_q = tk.Label(btn_frame, text="Expected Parts:", font=self.font_body_bold,
@@ -238,14 +257,14 @@ class SmartVideoSplitterApp:
         # Info panel degiskenleri
         self.info_vars = {}
         info_fields = [
-            ("video_adi",       "Video Name"),
-            ("video_suresi",    "Video Duration"),
-            ("cozunurluk",      "Resolution"),
-            ("dosya_boyutu",    "File Size"),
-            ("parca_sayisi",     "Part Count"),
-            ("gecen_sure",      "Elapsed Time"),
-            ("tahmini_kalan",   "Estimated Remaining"),
-            ("islem_hizi",      "Processing Speed"),
+            ("video_adi",       "🎬 Video Name"),
+            ("video_suresi",    "⏱️ Video Duration"),
+            ("cozunurluk",      "📐 Resolution"),
+            ("dosya_boyutu",    "💾 File Size"),
+            ("parca_sayisi",    "✂️ Part Count"),
+            ("gecen_sure",      "⏳ Elapsed Time"),
+            ("tahmini_kalan",   "📈 Est. Remaining"),
+            ("islem_hizi",      "⚡ Processing Speed"),
         ]
         
         for key, label in info_fields:
@@ -281,7 +300,7 @@ class SmartVideoSplitterApp:
                                 insertbackground=COLORS["log_fg"],
                                 selectbackground=COLORS["accent2"])
         
-        scrollbar = ttk.Scrollbar(log_inner, orient=tk.VERTICAL, command=self.log_area.yview)
+        scrollbar = ttk.Scrollbar(log_inner, orient=tk.VERTICAL, command=self.log_area.yview, style="Cyber.Vertical.TScrollbar")
         self.log_area.configure(yscrollcommand=scrollbar.set)
         
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
