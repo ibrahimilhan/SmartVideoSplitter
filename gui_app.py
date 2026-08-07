@@ -490,9 +490,9 @@ class SmartVideoSplitterApp:
                         bg_color=COLORS["warning"], hover_color="#f2c130", 
                         font=self.font_body_bold, width=190, height=36).pack(side=tk.LEFT, padx=5)
                       
-            CyberButton(btn_frame, text="Split by AI Count", command=lambda: set_ans("ai"), 
+            CyberButton(btn_frame, text="Split by Detected Count", command=lambda: set_ans("ai"), 
                         bg_color=COLORS["success"], hover_color="#36cf8a", 
-                        font=self.font_body_bold, width=160, height=36).pack(side=tk.LEFT, padx=5)
+                        font=self.font_body_bold, width=190, height=36).pack(side=tk.LEFT, padx=5)
                       
             CyberButton(btn_frame, text="Skip Video", command=lambda: set_ans("skip"), 
                         bg_color=COLORS["bg_card_alt"], hover_color=COLORS["accent"], 
@@ -782,7 +782,7 @@ class SmartVideoSplitterApp:
                 if realistic_q != expected_q:
                     print(f"  [WARNING] {expected_q} parts requested but {realistic_q} realistic transitions detected.")
                     msg = (
-                        f"You expected {expected_q} parts for '{v_name}', but the AI detected {realistic_q} realistic transition effects (parts).\n\n"
+                        f"You expected {expected_q} parts for '{v_name}', but the algorithm detected {realistic_q} realistic transition effects (parts).\n\n"
                         f"How would you like to proceed?\n\n"
                         f"Note: If the difference is very small (e.g., 1-2), it's likely a minor skipped effect. "
                         f"You can choose 'Force Split by My Count' to proceed with your number."
@@ -793,7 +793,7 @@ class SmartVideoSplitterApp:
                         print(f"  [CANCELLED] Video skipped by user.")
                         continue
                     elif ans == "ai":
-                        print(f"  [AI] Rescanning based on AI count: {realistic_q} parts...")
+                        print(f"  [AUTO] Rescanning based on detected count: {realistic_q} parts...")
                         self.stat_status.set(f"Rescanning {idx}/{len(videos)}")
                         cut_points = scan_and_build(v)
                         expected_q = realistic_q  # UI'daki hedef sayiyi guncelle
