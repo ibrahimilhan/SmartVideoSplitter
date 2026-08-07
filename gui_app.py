@@ -47,6 +47,100 @@ class RedirectText:
         pass
 
 
+
+def hex_to_rgb(hex_color):
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+def rgb_to_hex(rgb):
+    return '#%02x%02x%02x' % rgb
+
+def fade_color(c1_hex, c2_hex, ratio):
+    c1 = hex_to_rgb(c1_hex)
+    c2 = hex_to_rgb(c2_hex)
+    r = int(c1[0] * (1 - ratio) + c2[0] * ratio)
+    g = int(c1[1] * (1 - ratio) + c2[1] * ratio)
+    b = int(c1[2] * (1 - ratio) + c2[2] * ratio)
+    return rgb_to_hex((r, g, b))
+
+class CyberButton(tk.Canvas):
+    def __init__(self, master, text, command, bg_color, hover_color, font, width=180, height=36, **kwargs):
+        super().__init__(master, width=width, height=height, bg=COLORS["bg_dark"], highlightthickness=0, **kwargs)
+        self.command = command
+        self.text = text
+        self.bg_color = bg_color
+        self.hover_color = hover_color
+        self.font = font
+        
+        self.bind("<Enter>", self.on_enter)
+        self.bind("<Leave>", self.on_leave)
+        self.bind("<Button-1>", self.on_click)
+        self.bind("<ButtonRelease-1>", self.on_release)
+        
+        self.draw_button(self.bg_color)
+        
+    def draw_button(self, color, is_pressed=False):
+        self.delete("all")
+        w, h = int(self['width']), int(self['height'])
+        cut = 8
+        # Chamfered polygon points (top-left chamfered, bottom-right chamfered)
+        points = [
+            cut, 0,
+            w, 0,
+            w, h - cut,
+            w - cut, h,
+            0, h,
+            0, cut
+        ]
+        outline_color = COLORS["accent"] if color == self.hover_color else "#314559"
+        fill_color = COLORS["bg_card_alt"] if is_pressed else color
+        
+        self.create_polygon(points, fill=fill_color, outline=outline_color, width=1)
+        
+        # Inner glow line simulation (top edge)
+        self.create_line(cut+2, 1, w-2, 1, fill="#ffffff", stipple="gray25")
+        
+        y_offset = 1 if is_pressed else 0
+        self.create_text(w/2, h/2 + y_offset, text=self.text, font=self.font, fill="white")
+        
+    def on_enter(self, e):
+        self.config(cursor="hand2")
+        self.draw_button(self.hover_color)
+        
+    def on_leave(self, e):
+        self.draw_button(self.bg_color)
+        
+    def on_click(self, e):
+        self.draw_button(self.bg_color, is_pressed=True)
+        
+    def on_release(self, e):
+        self.draw_button(self.hover_color)
+        if self.command:
+            self.command()
+
+class GradientDivider(tk.Canvas):
+    def __init__(self, master, width=600, height=2, color=COLORS["accent"], bg_color=COLORS["bg_dark"], **kwargs):
+        super().__init__(master, width=width, height=height, bg=bg_color, highlightthickness=0, **kwargs)
+        self.draw_gradient(width, height, color, bg_color)
+        
+    def draw_gradient(self, width, height, color, bg_color):
+        segments = 50
+        seg_w = width / (segments * 2)
+        # Left half
+        for i in range(segments):
+            ratio = i / segments
+            c = fade_color(bg_color, color, ratio)
+            x1 = i * seg_w
+            x2 = (i + 1) * seg_w
+            self.create_rectangle(x1, 0, x2, height, fill=c, outline="")
+        # Right half
+        for i in range(segments):
+            ratio = 1.0 - (i / segments)
+            c = fade_color(bg_color, color, ratio)
+            x1 = (segments + i) * seg_w
+            x2 = (segments + i + 1) * seg_w
+            self.create_rectangle(x1, 0, x2, height, fill=c, outline="")
+
 class SmartVideoSplitterApp:
     def __init__(self, root):
         self.root = root
@@ -80,11 +174,19 @@ class SmartVideoSplitterApp:
         self.font_stat_label = ("Segoe UI", 9)
 
     def create_rounded_frame(self, parent, bg_color, pad=15):
-        """Kartin etrafinda ince bir border efekti olustur"""
-        outer = tk.Frame(parent, bg=COLORS["border"], padx=1, pady=1)
-        inner = tk.Frame(outer, bg=bg_color, padx=pad, pady=pad)
+        """Sahte Glow/Drop Shadow Efektli Kart"""
+        # Dis katman (en koyu)
+        outer1 = tk.Frame(parent, bg="#0d121c", padx=1, pady=1)
+        # Orta katman (gecis)
+        outer2 = tk.Frame(outer1, bg="#131b29", padx=1, pady=1)
+        # Ic katman (siberpunk ince cizgi)
+        outer3 = tk.Frame(outer2, bg="#1d2e40", padx=1, pady=1)
+        
+        inner = tk.Frame(outer3, bg=bg_color, padx=pad, pady=pad)
         inner.pack(fill=tk.BOTH, expand=True)
-        return outer, inner
+        outer3.pack(fill=tk.BOTH, expand=True)
+        outer2.pack(fill=tk.BOTH, expand=True)
+        return outer1, inner
 
     def setup_ui(self):
         # SCROLLBAR STILI
@@ -129,7 +231,7 @@ class SmartVideoSplitterApp:
                 print(f"Banner yuklenirken hata: {e}")
 
         # Ana container (Tum bilesenler bunun icinde)
-        main_container = tk.Frame(self.root, bg=COLORS["bg_dark"], padx=32, pady=24)
+        main_container = tk.Frame(self.root, bg=COLORS["bg_dark"], padx=48, pady=36)
         main_container.pack(fill=tk.BOTH, expand=True)
         
         # ===== HEADER BOLUMU (Yazi Tabanli Sik Tasarim) =====
@@ -144,9 +246,9 @@ class SmartVideoSplitterApp:
                  font=("Segoe UI", 12), fg=COLORS["accent2"],
                  bg=COLORS["bg_dark"]).pack(anchor="w", pady=(4, 12))
                  
-        # Estetik ayrac cizgisi (Neon vurgu)
-        separator = tk.Frame(title_frame, bg=COLORS["accent"], height=2)
-        separator.pack(fill=tk.X, anchor="w", pady=(0, 4))
+        # Gradient Ayrac
+        separator = GradientDivider(title_frame, width=800, height=2, color=COLORS["accent"], bg_color=COLORS["bg_dark"])
+        separator.pack(fill=tk.X, anchor="w", pady=(4, 8))
         
         # Versiyon etiketi sag ust
         ver_frame = tk.Frame(header, bg=COLORS["bg_card"], padx=14, pady=6)
@@ -191,21 +293,15 @@ class SmartVideoSplitterApp:
         btn_frame = tk.Frame(main_container, bg=COLORS["bg_dark"])
         btn_frame.pack(fill=tk.X, pady=(0, 12))
         
-        btn_file = tk.Button(btn_frame, text="🎬 Select Video File", bg=COLORS["accent2"], fg="white",
-                  font=self.font_body_bold, padx=14, pady=6, relief=tk.FLAT, cursor="hand2",
-                  activebackground=COLORS["accent"], activeforeground="white",
-                  command=self.browse_files)
-        btn_file.pack(side=tk.LEFT, padx=(0, 8))
-        btn_file.bind("<Enter>", lambda e: btn_file.config(bg=COLORS["accent"]))
-        btn_file.bind("<Leave>", lambda e: btn_file.config(bg=COLORS["accent2"]))
+        btn_file = CyberButton(btn_frame, text="🎬 SELECT VIDEO FILE", command=self.browse_files, 
+                               bg_color=COLORS["accent2"], hover_color=COLORS["accent"], 
+                               font=self.font_body_bold, width=200, height=38)
+        btn_file.pack(side=tk.LEFT, padx=(0, 16))
         
-        btn_folder = tk.Button(btn_frame, text="📁 Select Folder", bg=COLORS["accent2"], fg="white",
-                  font=self.font_body_bold, padx=14, pady=6, relief=tk.FLAT, cursor="hand2",
-                  activebackground=COLORS["accent"], activeforeground="white",
-                  command=self.browse_folder)
+        btn_folder = CyberButton(btn_frame, text="📁 SELECT FOLDER", command=self.browse_folder, 
+                               bg_color=COLORS["accent2"], hover_color=COLORS["accent"], 
+                               font=self.font_body_bold, width=180, height=38)
         btn_folder.pack(side=tk.LEFT, padx=(0, 16))
-        btn_folder.bind("<Enter>", lambda e: btn_folder.config(bg=COLORS["accent"]))
-        btn_folder.bind("<Leave>", lambda e: btn_folder.config(bg=COLORS["accent2"]))
         
         # Soru sayisi giris alani
         lbl_q = tk.Label(btn_frame, text="Expected Parts:", font=self.font_body_bold,
