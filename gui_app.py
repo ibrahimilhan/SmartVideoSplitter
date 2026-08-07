@@ -277,8 +277,10 @@ class SmartVideoSplitterApp:
         
         title_frame = tk.Frame(header, bg=COLORS["bg_dark"])
         title_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-
+                # Alt baslik
+        tk.Label(title_frame, text="Automated Scene Splitting Algorithm",
+                 font=("Cascadia Code", 11, "bold"), fg=COLORS["text_muted"],
+                 bg=COLORS["bg_dark"]).pack(anchor="w", pady=(4, 12))
                  
         # Gradient Ayrac
         separator = GradientDivider(title_frame, width=800, height=2, color=COLORS["accent"], bg_color=COLORS["bg_dark"])
