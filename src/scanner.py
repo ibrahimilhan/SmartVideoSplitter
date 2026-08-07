@@ -20,7 +20,7 @@ def get_video_duration(video_path: str) -> float:
 
 def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
     """
-    Videoyu 1 FPS'e dusurur, gri tonlama raw veriye cevirir ve
+    Videoyu 4 FPS'e dusurur, gri tonlama raw veriye cevirir ve
     ardisik kareler arasindaki piksel farkini hesaplayarak
     gecis noktalarini (fade, sahne degisimi) tespit eder.
     Bu yontem ffmpeg blackdetect'ten cok daha guvenilirdir.
@@ -32,7 +32,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
     
     subprocess.run([
         'ffmpeg', '-y', '-i', video_path,
-        '-vf', 'fps=1,scale=320:180,format=gray',
+        '-vf', 'fps=4,scale=320:180,format=gray',
         '-f', 'rawvideo', '-pix_fmt', 'gray', raw_file
     ], capture_output=True)
     
@@ -51,7 +51,8 @@ def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
     diffs = []
     for i in range(1, num_frames):
         diff = np.mean(np.abs(frames[i].astype(float) - frames[i-1].astype(float)))
-        diffs.append((i, diff))
+        time_sec = i / 4.0
+        diffs.append((time_sec, diff))
     
     if os.path.exists(raw_file):
         os.remove(raw_file)
@@ -81,10 +82,11 @@ def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
     
     # Videonun bas ve sonundaki buyuk degisimleri (intro/outro) filtrele
     inner = []
+    total_sec = num_frames / 4.0
     for sec, score in clusters:
         if sec <= 2 and score > 5:
             continue
-        if sec >= num_frames - 2 and score > 5:
+        if sec >= total_sec - 2 and score > 5:
             continue
         inner.append((sec, score))
         
