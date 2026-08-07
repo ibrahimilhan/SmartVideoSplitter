@@ -141,6 +141,43 @@ class GradientDivider(tk.Canvas):
             x2 = (segments + i + 1) * seg_w
             self.create_rectangle(x1, 0, x2, height, fill=c, outline="")
 
+
+class CyberCard(tk.Canvas):
+    def __init__(self, master, bg_color, glow_color, **kwargs):
+        super().__init__(master, bg=COLORS["bg_dark"], highlightthickness=0, **kwargs)
+        self.bg_color = bg_color
+        self.glow_color = glow_color
+        self.bind("<Configure>", self.on_resize)
+        
+    def on_resize(self, event):
+        self.delete("all")
+        w, h = event.width, event.height
+        cut = 16
+        # Outer glow layer
+        points_glow = [
+            cut, 0,
+            w, 0,
+            w, h - cut,
+            w - cut, h,
+            0, h,
+            0, cut
+        ]
+        self.create_polygon(points_glow, fill=self.glow_color, outline="")
+        
+        # Inner card layer
+        points = [
+            cut, 2,
+            w-2, 2,
+            w-2, h - cut,
+            w - cut, h-2,
+            2, h-2,
+            2, cut
+        ]
+        self.create_polygon(points, fill=self.bg_color, outline="#314559", width=1)
+        
+        # Top edge inner glow
+        self.create_line(cut+2, 3, w-4, 3, fill="#ffffff", stipple="gray25")
+
 class SmartVideoSplitterApp:
     def __init__(self, root):
         self.root = root
@@ -331,8 +368,12 @@ class SmartVideoSplitterApp:
         ]
         
         for i, (var, label, color) in enumerate(stat_data):
-            s_outer, s_inner = self.create_rounded_frame(stats_frame, COLORS["bg_card"], pad=10)
-            s_outer.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0 if i == 0 else 4, 0 if i == len(stat_data)-1 else 4))
+            card = CyberCard(stats_frame, bg_color=COLORS["bg_card"], glow_color="#131b29", height=110)
+            card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0 if i == 0 else 8, 0 if i == len(stat_data)-1 else 8))
+            
+            # Place an inner frame in the center of the Canvas for the labels
+            s_inner = tk.Frame(card, bg=COLORS["bg_card"])
+            s_inner.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
             
             tk.Label(s_inner, textvariable=var, font=self.font_stat, fg=color,
                      bg=COLORS["bg_card"]).pack()
