@@ -350,7 +350,39 @@ class SmartVideoSplitterApp:
         self.entry_q_count.pack(side=tk.LEFT, ipady=4, padx=(0, 8))
         
         tk.Label(btn_frame, text="(Optional)", font=self.font_small,
-                 fg=COLORS["text_muted"], bg=COLORS["bg_dark"]).pack(side=tk.LEFT)
+                 fg=COLORS["text_muted"], bg=COLORS["bg_dark"]).pack(side=tk.LEFT, padx=(0, 16))
+                 
+        self.var_precise = tk.BooleanVar(value=False)
+        self.chk_precise = tk.Checkbutton(
+            btn_frame, text="Precise Cut", variable=self.var_precise,
+            bg=COLORS["bg_dark"], fg=COLORS["text_secondary"], font=self.font_body_bold,
+            selectcolor=COLORS["bg_card"], activebackground=COLORS["bg_dark"],
+            activeforeground=COLORS["accent"],
+            command=self._toggle_precise
+        )
+        self.chk_precise.pack(side=tk.LEFT, padx=(0, 4))
+        
+        max_threads = os.cpu_count() or 4
+        default_val = max_threads // 2 if max_threads >= 2 else 1
+
+        self.var_speed = tk.StringVar(value=str(default_val))
+        
+        # Cyber-styled CPU Frame
+        cpu_frame = tk.Frame(btn_frame, bg=COLORS["bg_card"], padx=8, pady=3)
+        cpu_frame.pack(side=tk.LEFT, padx=(12, 0))
+        
+        tk.Label(cpu_frame, text="CPU Threads:", font=self.font_small,
+                 fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(side=tk.LEFT, padx=(0, 6))
+                 
+        self.entry_speed = tk.Entry(
+            cpu_frame, textvariable=self.var_speed,
+            width=3, font=self.font_body_bold, bg=COLORS["bg_dark"], fg=COLORS["accent"],
+            relief=tk.FLAT, justify="center", insertbackground=COLORS["accent"], state="disabled"
+        )
+        self.entry_speed.pack(side=tk.LEFT, ipady=2)
+        
+        tk.Label(cpu_frame, text=f"/ {max_threads} Max", font=self.font_small,
+                 fg=COLORS["success"], bg=COLORS["bg_card"]).pack(side=tk.LEFT, padx=(6, 0))
 
         # ===== ISTATISTIK KARTLARI =====
         stats_frame = tk.Frame(main_container, bg=COLORS["bg_dark"])
@@ -613,12 +645,29 @@ class SmartVideoSplitterApp:
             videos = glob.glob(os.path.join(folder, "*.mp4"))
             self._start_processing(videos)
 
+    def _toggle_precise(self):
+        if self.var_precise.get():
+            self.entry_speed.config(state="normal")
+        else:
+            self.entry_speed.config(state="disabled")
+
     def _start_processing(self, videos_to_process):
         """Ortak islemi baslatan fonksiyon (surukle-birak ve butonlar icin)."""
         if not videos_to_process:
             messagebox.showwarning("Warning", "No valid MP4 file found!")
             return
             
+        if self.var_precise.get():
+            try:
+                t_count = int(self.var_speed.get())
+                max_t = os.cpu_count() or 4
+                if t_count > max_t:
+                    messagebox.showerror("Hardware Limit Exceeded", f"Access Denied!\n\nSystem Analysis detected only {max_t} CPU Cores.\nYou cannot allocate {t_count} threads. This would crash the system.")
+                    return
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter a valid number for threads.")
+                return
+                
         self._reset_ui()
             
         # Beklenen soru sayisini al
@@ -644,7 +693,9 @@ class SmartVideoSplitterApp:
         self._blink_active = True
         self._blink_dot()
         
-        threading.Thread(target=self.run_process, args=(videos_to_process, output_dir, expected_q), daemon=True).start()
+        is_precise = self.var_precise.get()
+        speed_lvl = self.var_speed.get()
+        threading.Thread(target=self.run_process, args=(videos_to_process, output_dir, expected_q, is_precise, speed_lvl), daemon=True).start()
 
     def open_folder(self, path):
         try:
@@ -713,10 +764,10 @@ class SmartVideoSplitterApp:
         if key in self.info_vars:
             self.info_vars[key].set(value)
 
-    def run_process(self, videos, output_dir, expected_q=None):
+    def run_process(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)"):
         self.is_processing = True
         try:
-            self._run_process_inner(videos, output_dir, expected_q)
+            self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl)
         except Exception as e:
             print(f"\n  [CRITICAL ERROR] An error occurred during processing: {e}")
             self.stat_status.set("❌ Error")
@@ -725,7 +776,7 @@ class SmartVideoSplitterApp:
             self.live_dot.configure(fg=COLORS["text_muted"])
             self._blink_active = False
             
-    def _run_process_inner(self, videos, output_dir, expected_q=None):
+    def _run_process_inner(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)"):
         total_questions = 0
         process_start = time.time()
         
@@ -825,7 +876,7 @@ class SmartVideoSplitterApp:
                 q_dur = end_time - start_time
                 q_num_str = f"{i+1:02d}_parca"
                 out_file = os.path.join(out_sub, f"{q_num_str}.mp4")
-                cut_video_segment(v, out_file, start_time, end_time)
+                cut_video_segment(v, out_file, start_time, end_time, is_precise, speed_lvl)
                 
             print(f"  ✓ {v_name} completed.")
             
