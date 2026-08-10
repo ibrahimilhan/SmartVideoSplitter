@@ -49,24 +49,68 @@ SVS will slice the videos like a razor in seconds and deliver them to you.
 
 ---
 
-## 🛠️ Installation (For Developers & Editors)
+## 🛠️ Installation (Windows)
 
-There is a massive technology behind the program. If you want to run it on your own system:
+Open **CMD** and paste these in order.
 
-```bash
-# 1. Clone the repo to your computer
+```cmd
+winget install Gyan.FFmpeg
+```
+
+> ⚠️ **Now close CMD and open a new one.** `winget` adds FFmpeg to your PATH,
+> but the window you are in cannot see it yet. Skipping this is the #1 reason
+> the app fails later.
+
+```cmd
 git clone https://github.com/ibrahimilhan/SmartVideoSplitter.git
-
-# 2. Enter the folder
 cd SmartVideoSplitter
-
-# 3. Install the required libraries
 pip install -r requirements.txt
-
-# 4. Start the Application!
 python gui_app.py
 ```
-*(Note: To be able to cut at flying speeds in the background, [FFmpeg](https://ffmpeg.org/) must be installed on your computer and added to the System Path.)*
+
+That's it. Total download is about 20 MB.
+
+### Check before you start
+
+```cmd
+ffmpeg -version
+```
+
+If you see a version number, you are ready. If you see
+`'ffmpeg' is not recognized`, FFmpeg is not on your PATH — reopen CMD, or
+re-run the `winget` line above.
+
+### Requirements
+
+| | |
+|---|---|
+| Python | 3.9+ ([python.org](https://www.python.org/downloads/) — tick **"Add python.exe to PATH"**) |
+| FFmpeg | installed and on PATH (the `winget` line does this) |
+| Packages | `numpy`, `Pillow`, `tkinterdnd2` — installed by `pip install -r requirements.txt` |
+
+<details>
+<summary><b>macOS / Linux</b></summary>
+
+Only the FFmpeg step differs:
+
+```bash
+brew install ffmpeg          # macOS
+sudo apt install ffmpeg      # Debian / Ubuntu
+sudo dnf install ffmpeg      # Fedora
+```
+
+Then:
+
+```bash
+git clone https://github.com/ibrahimilhan/SmartVideoSplitter.git
+cd SmartVideoSplitter
+pip install -r requirements.txt
+python gui_app.py
+```
+
+Note: NVENC and the rest are written to be cross-platform, but the app has
+only been tested on Windows so far.
+</details>
 
 ---
 

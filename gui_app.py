@@ -851,16 +851,21 @@ class SmartVideoSplitterApp:
                 "  Arch           sudo pacman -S ffmpeg")
             return
 
+        # README'deki adimlarla ayni kalmali.
         msg = (
             "echo =================================================== & "
-            "echo FFMPEG INSTALLATION GUIDE & "
+            "echo FFMPEG INSTALLATION & "
             "echo =================================================== & "
             "echo. & "
-            "echo To install FFmpeg, copy the following command, paste it here, and press ENTER: & "
+            "echo 1^) Copy the line below, paste it here, press ENTER: & "
             "echo. & "
-            "echo winget install Gyan.FFmpeg & "
+            "echo      winget install Gyan.FFmpeg & "
             "echo. & "
-            "echo You can close this CMD window after the installation is complete."
+            "echo 2^) IMPORTANT - when it finishes, CLOSE this window and & "
+            "echo    RESTART SmartVideoSplitter. FFmpeg is only added to & "
+            "echo    your PATH for newly opened programs. & "
+            "echo. & "
+            "echo 3^) To verify, open a NEW cmd and run:  ffmpeg -version"
         )
         os.system(f'start cmd.exe /k "{msg}"')
 
