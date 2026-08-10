@@ -2,7 +2,7 @@ import subprocess
 import os
 from typing import Tuple
 
-def cut_video_segment(input_path: str, output_path: str, start_time: float, end_time: float, precise: bool = False, speed_lvl: str = "Balanced (Medium)") -> bool:
+def cut_video_segment(input_path: str, output_path: str, start_time: float, end_time: float, precise: bool = False, speed_lvl: str = "Balanced (Medium)", is_gpu: bool = False) -> bool:
     """
     Cuts a segment from the input video and saves it to output_path.
     If precise=True, re-encodes the segment for millimeter precision.
@@ -15,30 +15,41 @@ def cut_video_segment(input_path: str, output_path: str, start_time: float, end_
         return True
         
     if precise:
-        try:
-            thread_count = str(int(speed_lvl.split(" ")[0]))
-        except:
-            thread_count = "4" # fallback
+        if is_gpu:
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_time),
+                "-i", input_path,
+                "-t", str(duration),
+                "-c:v", "h264_nvenc", "-preset", "fast",
+                "-c:a", "copy",
+                output_path
+            ]
+        else:
+            try:
+                thread_count = str(int(speed_lvl.split(" ")[0]))
+            except:
+                thread_count = "4" # fallback
+                
+            # 0 means auto/max in FFmpeg, but we extracted exact counts now
+            if "Max" in speed_lvl:
+                thread_count = "0" 
+                
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_time),
+                "-i", input_path,
+                "-t", str(duration),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18"
+            ]
             
-        # 0 means auto/max in FFmpeg, but we extracted exact counts now
-        if "Max" in speed_lvl:
-            thread_count = "0" 
-            
-        cmd = [
-            "ffmpeg", "-y",
-            "-ss", str(start_time),
-            "-i", input_path,
-            "-t", str(duration),
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18"
-        ]
-        
-        if thread_count != "0":
-            cmd.extend(["-threads", thread_count])
-            
-        cmd.extend([
-            "-c:a", "copy",
-            output_path
-        ])
+            if thread_count != "0":
+                cmd.extend(["-threads", thread_count])
+                
+            cmd.extend([
+                "-c:a", "copy",
+                output_path
+            ])
     else:
         cmd = [
             "ffmpeg", "-y",

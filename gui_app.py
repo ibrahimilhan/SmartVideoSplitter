@@ -34,14 +34,32 @@ COLORS = {
 
 class RedirectText:
     """Konsol ciktilarini (print) Tkinter text widget'ina yonlendirmek icin sinif"""
-    def __init__(self, text_widget):
+    def __init__(self, text_widget, root):
         self.text_widget = text_widget
+        self.root = root
+        self.buffer = []
+        self.update_pending = False
 
     def write(self, string):
+        self.buffer.append(string)
+        if not self.update_pending:
+            self.update_pending = True
+            self.root.after(50, self._flush_buffer)
+
+    def _flush_buffer(self):
+        if not self.buffer:
+            self.update_pending = False
+            return
+            
+        data = "".join(self.buffer)
+        self.buffer.clear()
+        
         self.text_widget.configure(state="normal")
-        self.text_widget.insert(tk.END, string)
+        self.text_widget.insert(tk.END, data)
         self.text_widget.see(tk.END)
         self.text_widget.configure(state="disabled")
+        
+        self.update_pending = False
 
     def flush(self):
         pass
@@ -196,7 +214,9 @@ class SmartVideoSplitterApp:
         self.setup_ui()
         self.setup_dnd()
         
-        sys.stdout = RedirectText(self.log_area)
+        # Konsol yonlendirmesi
+        sys.stdout = RedirectText(self.log_area, self.root)
+        sys.stderr = RedirectText(self.log_area, self.root)
         
     def setup_fonts(self):
         self.font_title = ("Consolas", 26, "bold") # Ana baslik icin teknolojik font
@@ -617,6 +637,7 @@ class SmartVideoSplitterApp:
         self.overlay.place_forget()
 
     def handle_drop(self, event):
+            
         if self._hide_timer is not None:
             self.root.after_cancel(self._hide_timer)
             self._hide_timer = None
@@ -636,7 +657,9 @@ class SmartVideoSplitterApp:
             elif p.lower().endswith(".mp4"):
                 videos_to_process.append(p)
                 
-        self._start_processing(videos_to_process)
+            
+        # UI kilitlenmesini onlemek icin event handler'dan ciktiktan sonra baslat
+        self.root.after(50, lambda v=videos_to_process: self._start_processing(v))
 
     def browse_files(self):
         """Dosya secme penceresiyle MP4 dosyalari sec."""
@@ -677,18 +700,18 @@ class SmartVideoSplitterApp:
             
     def _check_nvidia_gpu(self):
         try:
-            import subprocess
-            # Use PowerShell's Get-CimInstance for universal compatibility (bypasses Firewall and WMIC deprecation)
             cmd = 'powershell -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"'
-            output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
-            
-            lines = [line.strip() for line in output.split('\n') if line.strip()]
-            
+            raw_out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+            output = raw_out.decode('utf-8', errors='ignore')
+            if not output.strip():
+                output = raw_out.decode('cp1254', errors='ignore')
+                
             nvidia_gpu = None
             other_gpus = []
-            
-            for line in lines:
-                if "nvidia" in line.lower():
+            for line in output.splitlines():
+                line = line.strip()
+                if not line: continue
+                if "NVIDIA" in line.upper():
                     nvidia_gpu = line
                 else:
                     other_gpus.append(line)
@@ -704,6 +727,7 @@ class SmartVideoSplitterApp:
 
     def _start_processing(self, videos_to_process):
         """Ortak islemi baslatan fonksiyon (surukle-birak ve butonlar icin)."""
+            
         if not videos_to_process:
             messagebox.showwarning("Warning", "No valid MP4 file found!")
             return
@@ -712,27 +736,28 @@ class SmartVideoSplitterApp:
             if self.var_gpu.get():
                 has_nvidia, gpu_name = self._check_nvidia_gpu()
                 if not has_nvidia:
-                    messagebox.showerror(
-                        "Hardware Unsupported", 
-                        f"Access Denied!\n\nSystem Analysis detected: [{gpu_name}]\n\n"
-                        "Your computer does not support this feature. An NVIDIA graphics card (GTX/RTX) is required.\n\n"
-                        "Please uncheck NVIDIA NVENC and use the CPU options instead."
-                    )
-                    return
+                    # NEVER USE MESSAGEBOX DURING DND! IT DEADLOCKS!
+                    self.var_gpu.set(False)
+                    print(f"[WARNING] NVIDIA GPU Not Found! Falling back to CPU. ({gpu_name})")
                 else:
-                    self.log_msg(f"[HARDWARE] System Analysis Complete.")
-                    self.log_msg(f"[HARDWARE] Dedicated GPU Found: {gpu_name}")
-                    self.log_msg(f"[HARDWARE] NVIDIA NVENC Engine Engaged! (Hyper-Speed)")
-            else:
+                    print(f"[HARDWARE] System Analysis Complete.")
+                    print(f"[HARDWARE] Dedicated GPU Found: {gpu_name}")
+                    print(f"[HARDWARE] NVIDIA NVENC Engine Engaged! (Hyper-Speed)")
+            
+            # Re-evaluate CPU block in case we fell back to CPU, or if we were on CPU already
+            if not self.var_gpu.get():
                 try:
                     t_count = int(self.var_speed.get())
                     max_t = os.cpu_count() or 4
                     if t_count > max_t:
-                        messagebox.showerror("Hardware Limit Exceeded", f"Access Denied!\n\nSystem Analysis detected only {max_t} CPU Cores.\nYou cannot allocate {t_count} threads. This would crash the system.")
-                        return
+                        # Auto-correct instead of aborting
+                        self.var_speed.set(str(max_t))
+                        print(f"[WARNING] Threads reduced to {max_t} to prevent system crash.")
                 except ValueError:
-                    messagebox.showerror("Invalid Input", "Please enter a valid number for threads.")
-                    return
+                    # Auto-correct invalid strings like "Balanced (Medium)"
+                    default_t = (os.cpu_count() or 4) // 2
+                    self.var_speed.set(str(default_t))
+                    print(f"[WARNING] Invalid thread count fixed to {default_t}.")
                 
         self._reset_ui()
             
@@ -745,6 +770,7 @@ class SmartVideoSplitterApp:
         base_dir = os.path.dirname(videos_to_process[0])
         output_dir = os.path.join(base_dir, "Split_Videos")
         
+            
         self.stat_video_count.set(str(len(videos_to_process)))
         
         if expected_q:
@@ -836,7 +862,9 @@ class SmartVideoSplitterApp:
         try:
             self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl, is_gpu)
         except Exception as e:
-            print(f"\n  [CRITICAL ERROR] An error occurred during processing: {e}")
+            
+            err = traceback.format_exc()
+            print(f"\\n  [CRITICAL ERROR] An error occurred during processing: {e}")
             self.stat_status.set("❌ Error")
         finally:
             self.is_processing = False
