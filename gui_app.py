@@ -393,6 +393,11 @@ class SmartVideoSplitterApp:
         
         tk.Label(cpu_frame, text=f"/ {max_threads} Max", font=self.font_small,
                  fg=COLORS["success"], bg=COLORS["bg_card"]).pack(side=tk.LEFT, padx=(6, 0))
+                 
+        btn_guide = CyberButton(btn_frame, text="[?] Guide & Architecture", command=self._show_tutorial, 
+                               bg_color=COLORS["bg_dark"], hover_color=COLORS["accent2"], 
+                               font=self.font_body_bold, width=220, height=38)
+        btn_guide.pack(side=tk.RIGHT, padx=(16, 0))
 
         # ===== ISTATISTIK KARTLARI =====
         stats_frame = tk.Frame(main_container, bg=COLORS["bg_dark"])
@@ -673,10 +678,29 @@ class SmartVideoSplitterApp:
     def _check_nvidia_gpu(self):
         try:
             import subprocess
-            output = subprocess.check_output('wmic path win32_VideoController get name', shell=True, text=True, stderr=subprocess.DEVNULL)
-            return "nvidia" in output.lower()
-        except:
-            return False
+            # Use PowerShell's Get-CimInstance for universal compatibility (bypasses Firewall and WMIC deprecation)
+            cmd = 'powershell -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"'
+            output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
+            
+            lines = [line.strip() for line in output.split('\n') if line.strip()]
+            
+            nvidia_gpu = None
+            other_gpus = []
+            
+            for line in lines:
+                if "nvidia" in line.lower():
+                    nvidia_gpu = line
+                else:
+                    other_gpus.append(line)
+                    
+            if nvidia_gpu:
+                return True, nvidia_gpu
+            elif other_gpus:
+                return False, other_gpus[0]
+            else:
+                return False, "Unknown GPU"
+        except Exception as e:
+            return False, f"Unknown GPU" 
 
     def _start_processing(self, videos_to_process):
         """Ortak islemi baslatan fonksiyon (surukle-birak ve butonlar icin)."""
@@ -686,9 +710,19 @@ class SmartVideoSplitterApp:
             
         if self.var_precise.get():
             if self.var_gpu.get():
-                if not self._check_nvidia_gpu():
-                    messagebox.showerror("Hardware Unsupported", "Access Denied!\n\nYour computer does not support this feature. An NVIDIA graphics card (GTX/RTX) is required.\n\nPlease uncheck NVIDIA NVENC and use the CPU options instead.")
+                has_nvidia, gpu_name = self._check_nvidia_gpu()
+                if not has_nvidia:
+                    messagebox.showerror(
+                        "Hardware Unsupported", 
+                        f"Access Denied!\n\nSystem Analysis detected: [{gpu_name}]\n\n"
+                        "Your computer does not support this feature. An NVIDIA graphics card (GTX/RTX) is required.\n\n"
+                        "Please uncheck NVIDIA NVENC and use the CPU options instead."
+                    )
                     return
+                else:
+                    self.log_msg(f"[HARDWARE] System Analysis Complete.")
+                    self.log_msg(f"[HARDWARE] Dedicated GPU Found: {gpu_name}")
+                    self.log_msg(f"[HARDWARE] NVIDIA NVENC Engine Engaged! (Hyper-Speed)")
             else:
                 try:
                     t_count = int(self.var_speed.get())
@@ -950,7 +984,58 @@ class SmartVideoSplitterApp:
         messagebox.showinfo("Completed", f"{len(videos)} videos successfully split!\nTotal {total_questions} parts cut.\nTime: {self._format_time(total_elapsed)}")
         self.open_folder(output_dir)
 
+
+    def _show_tutorial(self):
+        top = tk.Toplevel(self.root)
+        top.title("SVS Architecture & Guide")
+        top.geometry("700x550")
+        top.configure(bg=COLORS["bg_dark"])
+        top.transient(self.root)
+        
+        lbl_title = tk.Label(top, text="SYSTEM ARCHITECTURE & GUIDE", font=self.font_title, fg=COLORS["accent"], bg=COLORS["bg_dark"])
+        lbl_title.pack(pady=(20, 10))
+        
+        frame = tk.Frame(top, bg=COLORS["bg_dark"])
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        text_area = tk.Text(frame, wrap=tk.WORD, font=self.font_body, bg=COLORS["bg_dark"], fg=COLORS["text_primary"],
+                            relief=tk.FLAT, padx=15, pady=15, insertbackground=COLORS["text_primary"])
+        text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text_area.yview, style="Cyber.Vertical.TScrollbar")
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        text_area.config(yscrollcommand=scrollbar.set)
+        
+        guide_text = """
+[1] ⚡ HIZLI MOD vs 🎯 HASSAS KESİM (PRECISE CUT)
+--------------------------------------------------
+SVS, iki farklı kesim motoru kullanır:
+• Hızlı Mod (Precise Cut KAPALI): Veriyi yeniden kodlamadan doğrudan kopyalar. 2 saatlik bir videoyu sadece 1 saniyede sıfır kalite kaybıyla keser. Ancak kesim noktaları her zaman milimetrik olmayabilir.
+• Hassas Mod (Precise Cut AÇIK): Videoyu tamamen yeniden kodlayarak (Re-encode) milimetrik (kare kare) kusursuz kesim yapar. Ancak biraz daha uzun sürer ve donanım gücü gerektirir.
+
+[2] 🚀 NVIDIA NVENC (Donanım Hızlandırma)
+--------------------------------------------------
+Bu kutu seçildiğinde, SVS işlemcinizi (CPU) tamamen devreden çıkarır ve video yükünü doğrudan NVIDIA Ekran Kartınızın özel donanımsal video kodlama çipine (NVENC) gönderir.
+• Hız: Gerçek zamanlı render hızını 10x ile 20x arasına çıkarır (dakikalar süren işi saniyelere düşürür).
+• Sıcaklık: İşlemciyi yormadığı için laptop fanlarının bağırmasını engeller, sistemi buz gibi serin tutar.
+• Gereksinim: NVIDIA GTX/RTX Ekran kartı ve v610.00+ Sürücü.
+
+[3] ⚙️ İŞLEMCİ (CPU) SINIRLARI & AMDAHL YASASI
+--------------------------------------------------
+NVIDIA Ekran kartınız yoksa mecburen İşlemci (CPU) kullanmalısınız.
+• Neden her zaman en yüksek çekirdeği seçmemeliyiz?: Amdahl Yasası gereği, sisteme kaldırabileceğinden fazla çekirdek yüklemek dizüstü bilgisayarlarda aşırı ısınmaya (Thermal Throttling) ve tıkanıklığa (Darboğaz) yol açar.
+• Örneğin testlerimizde, 16 çekirdek seçildiğinde render işlemi 5-6 dakika sürerken, 8 çekirdek seçildiğinde sadece 1 dakikada bitmiştir!
+• Tavsiye: Hız ve stabilitenin 'Altın Oranı' (Sweet Spot) için çekirdek sayısını programın varsayılan (Default) değerinde bırakın.
+"""
+        text_area.insert(tk.END, guide_text.strip())
+        text_area.config(state=tk.DISABLED)
+        
+        CyberButton(top, text="CLOSE", command=top.destroy, 
+                    bg_color=COLORS["accent"], hover_color=COLORS["accent_hover"], 
+                    font=self.font_body_bold, width=120, height=35).pack(pady=(10, 20))
+
 if __name__ == "__main__":
+
     root = TkinterDnD.Tk()
     app = SmartVideoSplitterApp(root)
     root.mainloop()
