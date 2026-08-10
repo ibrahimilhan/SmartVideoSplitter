@@ -1,6 +1,8 @@
 import subprocess
 import os
-from typing import Tuple
+
+# Windows'ta her kesimde konsol penceresi yanip sonmesin.
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
 
 def cut_video_segment(input_path: str, output_path: str, start_time: float, end_time: float, precise: bool = False, speed_lvl: str = "Balanced (Medium)", is_gpu: bool = False) -> bool:
     """
@@ -63,10 +65,14 @@ def cut_video_segment(input_path: str, output_path: str, start_time: float, end_
     
     print(f"[FFMPEG] Cutting: {os.path.basename(output_path)} ({duration:.2f} seconds)")
     
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
+    # KURAL 3/14 — ham byte al, errors='ignore' ile coz (Turkce dosya adlari).
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            creationflags=_NO_WINDOW)
+
     if result.returncode != 0:
-        print(f"Error occurred: Could not cut {output_path}.")
+        err = result.stderr.decode("utf-8", errors="ignore").strip()
+        last_line = err.splitlines()[-1] if err else "unknown error"
+        print(f"  [ERROR] Could not cut {os.path.basename(output_path)}: {last_line}")
         return False
-        
+
     return True

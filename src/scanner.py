@@ -1,286 +1,361 @@
 import subprocess
 import numpy as np
 import os
-import threading
 
-SAFETY_MARGIN = 0.2
+# ---------------------------------------------------------------------------
+# ALGORITMA SABITLERI  (KURAL 15 — bu degerler gercek videolarla deneyerek
+# bulundu. Degistirirsen gercek videoyla test et, kor "iyilestirme" yapma.)
+# ---------------------------------------------------------------------------
+SAFETY_MARGIN = 0.2      # kesim noktasina birakilan pay (sn)
+FRAME_W = 320            # analiz cozunurlugu
+FRAME_H = 180
+FRAME_SIZE = FRAME_W * FRAME_H
+
+COARSE_FPS = 4           # kaba tarama
+FINE_FPS = 10            # hassas tarama
+FADE_FPS = 30            # fade-in kirpma
+
+DIFF_THRESHOLD = 1.0     # varsayilan gecis esigi (ort. mutlak piksel farki)
+DIFF_THRESHOLD_HINTED = 0.5  # kullanici parca sayisi verdiyse daha hassas esik
+CLUSTER_GAP = 3.0        # bu araliktaki zirveler tek gecis sayilir (sn)
+EDGE_GUARD = 2.0         # video basi/sonundaki intro-outro koruma penceresi (sn)
+EDGE_SCORE = 5.0         # intro/outro sayilmasi icin gereken skor
+BLANK_STD = 5.0          # kare "bos/siyah" mi (standart sapma)
+BRIGHT_STD = 10.0        # kare "dolu" mu
+MIN_PART_SEC = 15.0      # bundan kisa parcalar komsusuyla birlestirilir
+FADE_PROBE_SEC = 10      # parca basinda fade aranan pencere (sn)
+FADEOUT_PROBE_SEC = 15   # son parcanin sonunda kararma aranan pencere (sn)
+
+# Windows'ta her ffmpeg cagrisinda konsol penceresi yanip sonmesin.
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+
+
+def _run_quiet(args):
+    """
+    KURAL 3/14 — text=True YOK. Turkce Windows'ta ve Turkce dosya adlarinda
+    stderr'in locale ile cozulmesi UnicodeDecodeError ile programi cokertir.
+    Ham byte alip errors='ignore' ile coz.
+    """
+    result = subprocess.run(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=_NO_WINDOW,
+    )
+    return result.stdout.decode("utf-8", errors="ignore")
+
+
+def _gray_frames(args):
+    """
+    ffmpeg'i PIPE ile calistirip gri kareleri tek tek uretir.
+
+    KURAL 8 — ham gri veriyi ASLA diske yazma. Uzun bir video 1 GB+ eder,
+    islem yarida kalirsa dosya ortalikta kalir (repoda 7.6 GB birikmisti) ve
+    numpy'a komple yuklemek RAM'i patlatir. Burada ayni anda bellekte
+    yalnizca tek bir kare (~57 KB) durur.
+
+    Tuketici erken cikarsa (break) pipe kapanir, ffmpeg kendiliginden durur —
+    bu kasitli bir hizlandirmadir, bozma.
+    """
+    proc = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        creationflags=_NO_WINDOW,
+    )
+    try:
+        while True:
+            buf = proc.stdout.read(FRAME_SIZE)
+            if buf is None or len(buf) < FRAME_SIZE:
+                break
+            yield np.frombuffer(buf, dtype=np.uint8).reshape(FRAME_H, FRAME_W)
+    finally:
+        try:
+            proc.stdout.close()
+        except Exception:
+            pass
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+
+
+def _ffmpeg_gray_args(video_path, fps, ss=None, t=None):
+    """Gri ham kare uretimi icin ffmpeg argumanlari (stdout'a yazar)."""
+    args = ["ffmpeg", "-nostdin", "-v", "error"]
+    if ss is not None:
+        args += ["-ss", f"{ss:.3f}"]
+    if t is not None:
+        args += ["-t", f"{t:.3f}"]
+    args += [
+        "-i", video_path,
+        "-vf", f"fps={fps},scale={FRAME_W}:{FRAME_H},format=gray",
+        "-f", "rawvideo", "-pix_fmt", "gray", "-",
+    ]
+    return args
+
+
+def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0):
+    """(zaman, ardisik kare farki) ciftlerini akis halinde uretir."""
+    prev = None
+    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t))):
+        cur = frame.astype(np.float32)
+        if prev is not None:
+            yield (t0 + i / fps, float(np.mean(np.abs(cur - prev))))
+        prev = cur
+
 
 def get_video_duration(video_path: str) -> float:
-    """FFprobe ile videonun toplam suresini saniye cinsinden ogrenilir."""
-    cmd = [
+    """FFprobe ile videonun toplam suresini saniye cinsinden ogrenir."""
+    out = _run_quiet([
         "ffprobe", "-v", "error", "-show_entries",
         "format=duration", "-of",
         "default=noprint_wrappers=1:nokey=1", video_path
-    ]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    ])
     try:
-        return float(result.stdout.strip())
+        return float(out.strip())
     except ValueError:
         return 0.0
 
-def coarse_scan(video_path: str, expected_q_count: int = None) -> list:
+
+def coarse_scan(video_path: str, expected_q_count: int = None):
     """
-    Videoyu 4 FPS'e dusurur, gri tonlama raw veriye cevirir ve
-    ardisik kareler arasindaki piksel farkini hesaplayarak
-    gecis noktalarini (fade, sahne degisimi) tespit eder.
-    Bu yontem ffmpeg blackdetect'ten cok daha guvenilirdir.
+    Videoyu COARSE_FPS'e dusurup gri tonlamaya cevirir ve ardisik kareler
+    arasindaki piksel farkindan gecis noktalarini (fade, sahne degisimi)
+    tespit eder. Bu yontem ffmpeg blackdetect'ten cok daha guvenilirdir.
+
+    KURAL 9 — donus tipi HER ZAMAN (transitions, realistic_q_count).
     """
     print(f"  [SCAN] {os.path.basename(video_path)} - Rough scan started...")
-    
-    tid = threading.get_ident()
-    raw_file = f'frames_raw_{tid}.gray'
-    
-    subprocess.run([
-        'ffmpeg', '-y', '-i', video_path,
-        '-vf', 'fps=4,scale=320:180,format=gray',
-        '-f', 'rawvideo', '-pix_fmt', 'gray', raw_file
-    ], capture_output=True)
-    
-    frame_size = 320 * 180
-    raw_data = np.fromfile(raw_file, dtype=np.uint8)
-    num_frames = len(raw_data) // frame_size
-    
-    if num_frames < 2:
-        if os.path.exists(raw_file):
-            os.remove(raw_file)
-        return []
-    
-    frames = raw_data[:num_frames * frame_size].reshape(num_frames, 180, 320)
-    
-    # Ardisik karelerin piksel farklarini hesapla
-    diffs = []
-    for i in range(1, num_frames):
-        diff = np.mean(np.abs(frames[i].astype(float) - frames[i-1].astype(float)))
-        time_sec = i / 4.0
-        diffs.append((time_sec, diff))
-    
-    if os.path.exists(raw_file):
-        os.remove(raw_file)
-    
-    if expected_q_count is not None and expected_q_count > 0:
-        # Eger kullanici bilerek veya yanlislikla cok yuksek bir sayi girdiyse,
-        # sadece "gurultu" olan kucuk hareketleri kesmesin diye mutlak bir alt sinir (0.5) koyuyoruz.
-        # Bir fade efektinin skoru genelde 2.0 - 10.0 arasidir. 0.5'in alti kesinlikle sadece hareket/gurultudur.
-        all_peaks = [(sec, score) for sec, score in diffs if score > 0.5]
-    else:
-        # Varsayilan guvenli esik degeri
-        all_peaks = [(sec, score) for sec, score in diffs if score > 1.0]
 
+    diffs = list(_diff_stream(video_path, COARSE_FPS))
+    if not diffs:
+        return [], 1
+
+    total_sec = (len(diffs) + 1) / COARSE_FPS
+
+    # Kullanici parca sayisi verdiyse daha hassas esik kullan; yine de mutlak
+    # bir alt sinir birak ki salt hareket/gurultu gecis sayilmasin.
+    threshold = DIFF_THRESHOLD_HINTED if (expected_q_count or 0) > 0 else DIFF_THRESHOLD
+    all_peaks = [(sec, score) for sec, score in diffs if score > threshold]
     if not all_peaks:
-        return []
-    
-    # Yakin noktalari kumelestir (3 saniye icindeki zirveler tek gecis sayilir)
+        return [], 1
+
+    # Yakin zirveleri kumelestir — bir fade birden cok kare surer.
     clusters = []
-    current_cluster = [all_peaks[0]]
-    for i in range(1, len(all_peaks)):
-        if all_peaks[i][0] - current_cluster[-1][0] <= 3:
-            current_cluster.append(all_peaks[i])
+    current = [all_peaks[0]]
+    for peak in all_peaks[1:]:
+        if peak[0] - current[-1][0] <= CLUSTER_GAP:
+            current.append(peak)
         else:
-            clusters.append(max(current_cluster, key=lambda x: x[1]))
-            current_cluster = [all_peaks[i]]
-    clusters.append(max(current_cluster, key=lambda x: x[1]))
-    
-    # Videonun bas ve sonundaki buyuk degisimleri (intro/outro) filtrele
-    inner = []
-    total_sec = num_frames / 4.0
-    for sec, score in clusters:
-        if sec <= 2 and score > 5:
-            continue
-        if sec >= total_sec - 2 and score > 5:
-            continue
-        inner.append((sec, score))
-        
+            clusters.append(max(current, key=lambda x: x[1]))
+            current = [peak]
+    clusters.append(max(current, key=lambda x: x[1]))
+
+    # Videonun bas ve sonundaki buyuk degisimleri (intro/outro) ele
+    inner = [
+        (sec, score) for sec, score in clusters
+        if not (sec <= EDGE_GUARD and score > EDGE_SCORE)
+        and not (sec >= total_sec - EDGE_GUARD and score > EDGE_SCORE)
+    ]
+
     realistic_q_count = len(inner) + 1
-        
-    # Eger kullanici soru sayisi girdiyse, en yuksek skora sahip olanlari sec ve sirala
-    if expected_q_count is not None and expected_q_count > 0:
+
+    # Kullanici parca sayisi verdiyse en guclu N gecisi sec
+    if (expected_q_count or 0) > 0:
         expected_cuts = expected_q_count - 1
         if expected_cuts > 0:
-            # Skora gore buyukten kucuge sirala, ilk N tanesini al
-            inner.sort(key=lambda x: x[1], reverse=True)
-            
             if len(inner) < expected_cuts:
                 print(f"  [WARNING] {expected_q_count} parts expected, but only {len(inner)+1} realistic transitions found!")
                 print(f"  [WARNING] The rest were ignored to prevent unnecessary cuts.")
-            
+            inner.sort(key=lambda x: x[1], reverse=True)
             inner = inner[:expected_cuts]
-            # Tekrar zamana gore sirala
             inner.sort(key=lambda x: x[0])
-            
-        print(f"  [SCAN] {len(inner)} transition points found.")
-        return inner, realistic_q_count
-    
+
     print(f"  [SCAN] {len(inner)} transition points found.")
-    return inner
+    return inner, realistic_q_count
+
 
 def refine_transitions(video_path: str, coarse_transitions: list, duration: float) -> list:
     """
-    Kaba taramada bulunan gecis noktalarini 10 FPS hassasiyetinde tekrar tarar
-    ve her gecisin tam baslangiç/bitis zamanlarini belirler.
+    Kaba taramada bulunan gecisleri FINE_FPS hassasiyetinde tekrar tarar ve
+    her gecisin tam baslangic/bitis zamanini belirler.
     """
     if not coarse_transitions:
         return []
-        
+
     print(f"  [PRECISE] Transitions are being precisely scanned...")
-    
+
     refined = []
-    for idx, (coarse_sec, coarse_score) in enumerate(coarse_transitions):
-        win_start = max(0, coarse_sec - 3)
+    for coarse_sec, _score in coarse_transitions:
+        win_start = max(0.0, coarse_sec - 3.0)
         win_end = min(coarse_sec + SAFETY_MARGIN, duration)
         win_duration = win_end - win_start
-        
-        tid = threading.get_ident()
-        raw_file = f'fine_{tid}_{idx}.gray'
-        subprocess.run([
-            'ffmpeg', '-y', '-ss', str(win_start), '-t', str(win_duration),
-            '-i', video_path, '-vf', 'fps=10,scale=320:180,format=gray',
-            '-f', 'rawvideo', '-pix_fmt', 'gray', raw_file
-        ], capture_output=True)
-        
-        frame_size = 320 * 180
-        raw_data = np.fromfile(raw_file, dtype=np.uint8)
-        num_frames = len(raw_data) // frame_size
-        if num_frames < 2:
-            refined.append((coarse_sec - SAFETY_MARGIN, coarse_sec + SAFETY_MARGIN))
-            if os.path.exists(raw_file):
-                os.remove(raw_file)
-            continue
-            
-        frames = raw_data[:num_frames * frame_size].reshape(num_frames, 180, 320)
-        fine_diffs = []
-        for i in range(1, num_frames):
-            diff = np.mean(np.abs(frames[i].astype(float) - frames[i-1].astype(float)))
-            time_sec = win_start + i / 10.0
-            fine_diffs.append((time_sec, diff))
-            
-        exceeding = [(t, d) for t, d in fine_diffs if d > 1.0]
+
+        exceeding = []
+        if win_duration > 0:
+            exceeding = [
+                (t, d) for t, d in _diff_stream(
+                    video_path, FINE_FPS, ss=win_start, t=win_duration, t0=win_start
+                ) if d > DIFF_THRESHOLD
+            ]
+
         if exceeding:
-            fade_start = exceeding[0][0]
-            fade_end = exceeding[-1][0]
-            cut_before = fade_start - SAFETY_MARGIN
-            cut_after = fade_end + SAFETY_MARGIN
+            cut_before = exceeding[0][0] - SAFETY_MARGIN
+            cut_after = exceeding[-1][0] + SAFETY_MARGIN
         else:
             cut_before = coarse_sec - SAFETY_MARGIN
             cut_after = coarse_sec + SAFETY_MARGIN
-            
+
         refined.append((cut_before, cut_after))
-        if os.path.exists(raw_file):
-            os.remove(raw_file)
     return refined
+
 
 def trim_fadeins(video_path: str, questions: list) -> list:
     """
-    Her sorunun basindaki kararma efektini (fade-in) kirpar.
-    Boylece video parcasi direkt soruyla baslar, siyahlikla degil.
+    Her parcanin basindaki kararma efektini (fade-in) kirpar; boylece parca
+    siyahlikla degil dogrudan icerikle baslar.
+
+    Parca zaten siyah baslamiyorsa ilk karede cikilir — pipe kapanir, ffmpeg
+    durur. Yaygin durum bu oldugu icin buyuk hiz kazanci saglar.
     """
     trimmed = []
     for i, (start, end) in enumerate(questions):
-        tid = threading.get_ident()
-        raw_file = f'fade_check_{tid}_{i}.gray'
-        
-        subprocess.run([
-            'ffmpeg', '-y', '-ss', f'{start:.3f}', '-t', '10',
-            '-i', video_path, '-vf', 'fps=30,scale=320:180,format=gray',
-            '-f', 'rawvideo', '-pix_fmt', 'gray', raw_file
-        ], capture_output=True)
-        
-        frame_size = 320 * 180
-        raw_data = np.fromfile(raw_file, dtype=np.uint8)
-        num_frames = len(raw_data) // frame_size
-        
         new_start = start
-        if num_frames >= 2:
-            frames = raw_data[:num_frames * frame_size].reshape(num_frames, 180, 320)
-            std_dev = np.std(frames[0])
-            is_blank = std_dev < 5.0
-            
-            if is_blank:
-                diffs = []
-                for j in range(1, num_frames):
-                    diff = np.mean(np.abs(frames[j].astype(float) - frames[j-1].astype(float)))
-                    diffs.append((j/30.0, diff))
-                
-                fade_end_time = 0.0
-                for t, d in diffs:
-                    if d > 1.0:
-                        fade_end_time = t
-                        
-                if fade_end_time > 0:
-                    new_start = start + fade_end_time + 0.2
-                else:
-                    for j in range(1, num_frames):
-                        if np.std(frames[j]) > 10.0:
-                            new_start = start + (j/30.0) + 0.2
-                            break
-        
+        prev = None
+        last_fade_time = 0.0
+        first_bright_time = None
+
+        args = _ffmpeg_gray_args(video_path, FADE_FPS, ss=start, t=FADE_PROBE_SEC)
+        for j, frame in enumerate(_gray_frames(args)):
+            cur = frame.astype(np.float32)
+
+            if j == 0:
+                if float(np.std(cur)) >= BLANK_STD:
+                    break  # siyahla baslamiyor -> kirpacak bir sey yok
+                prev = cur
+                continue
+
+            if float(np.mean(np.abs(cur - prev))) > DIFF_THRESHOLD:
+                last_fade_time = j / FADE_FPS
+            if first_bright_time is None and float(np.std(cur)) > BRIGHT_STD:
+                first_bright_time = j / FADE_FPS
+            prev = cur
+
+        if last_fade_time > 0:
+            new_start = start + last_fade_time + SAFETY_MARGIN
+        elif first_bright_time is not None:
+            new_start = start + first_bright_time + SAFETY_MARGIN
+
         if new_start == start and i > 0:
-            new_start += 0.2
-            
+            new_start += SAFETY_MARGIN
+
         trimmed.append([new_start, end])
-        if os.path.exists(raw_file):
-            os.remove(raw_file)
-            
+
     return trimmed
 
-def merge_overlaps(questions: list) -> list:
-    """15 saniyeden kisa olan parcalari onceki soruyla birlestirir."""
-    short_indices = [i for i, q in enumerate(questions) if (q[1] - q[0]) < 15.0]
-    for i in short_indices:
-        if i > 0:
-            questions[i-1][1] = questions[i][1]
-    return [q for i, q in enumerate(questions) if i not in short_indices]
+
+def trim_final_fadeout(video_path: str, questions: list) -> list:
+    """
+    Son parcanin sonundaki kararmayi kirpar.
+
+    1..N-1 numarali parcalarin bitisi tespit edilen gecisten turetilir
+    (fade_start - SAFETY_MARGIN), yani zaten temizdir. Son parcanin bitisi
+    ise videonun kendi sonudur ve kapanis fade'ini icerebilir — hedef
+    "parcada fade gorunmesin" oldugu icin burasi ayrica kirpilir.
+    """
+    if not questions:
+        return questions
+
+    start, end = questions[-1]
+    window = min(FADEOUT_PROBE_SEC, max(0.0, end - start))
+    if window <= 0:
+        return questions
+
+    probe_start = end - window
+    last_content = None
+    for j, frame in enumerate(_gray_frames(
+            _ffmpeg_gray_args(video_path, FADE_FPS, ss=probe_start, t=window))):
+        if float(np.std(frame)) >= BLANK_STD:
+            last_content = probe_start + j / FADE_FPS
+
+    if last_content is None:
+        # Pencerenin tamami siyah — en azindan bildigimiz kadarini at.
+        questions[-1][1] = probe_start
+    elif last_content < end:
+        questions[-1][1] = min(end, last_content + 1.0 / FADE_FPS)
+
+    return questions
+
+
+def merge_overlaps(questions: list, min_len: float = MIN_PART_SEC) -> list:
+    """
+    MIN_PART_SEC'ten kisa parcalari komsusuyla birlestirir.
+
+    KURAL 16 — kisa parca SILINMEZ, birlestirilir. Onceki eski surum ilk parca
+    kisaysa onu sessizce dusuruyordu (videonun basi kayboluyordu) ve ardisik
+    kisa parcalarda birlestirmeyi zaten silinmis bir ogeye yaziyordu.
+    Burada her zaman "onceki KALAN parca"ya eklenir; henuz kalan parca yoksa
+    parca bir sonrakinin basina tasinir.
+    """
+    if not questions:
+        return []
+
+    merged = []
+    carry_start = None
+    for start, end in questions:
+        if carry_start is not None:
+            start = carry_start
+            carry_start = None
+
+        if (end - start) >= min_len:
+            merged.append([start, end])
+        elif merged:
+            merged[-1][1] = end          # onceki kalan parcayi uzat
+        else:
+            carry_start = start          # basta birikiyor -> sonrakine tasi
+
+    if carry_start is not None:
+        # Hicbir parca esigi gecemedi; tumunu tek parca yap (icerik kaybetme).
+        merged.append([carry_start, questions[-1][1]])
+
+    return merged
+
 
 def build_questions(refined: list, duration: float) -> list:
-    """Gecis noktalarindan soru araliklerini olusturur."""
+    """Gecis noktalarindan parca araliklarini olusturur."""
     if not refined:
         return [[0.0, duration]]
     questions = []
     for i in range(len(refined) + 1):
         if i == 0:
-            start = 0.0
-            end = refined[0][0]
+            start, end = 0.0, refined[0][0]
         elif i == len(refined):
-            start = refined[-1][1]
-            end = duration
+            start, end = refined[-1][1], duration
         else:
-            start = refined[i-1][1]
-            end = refined[i][0]
+            start, end = refined[i-1][1], refined[i][0]
         questions.append([start, end])
     return questions
 
-def scan_and_build(video_path: str, expected_q_count: int = None) -> list:
+
+def scan_and_build(video_path: str, expected_q_count: int = None):
     """
-    Ana fonksiyon: Videoyu tarar, gecisleri tespit eder,
-    hassas tarama yapar, fade-in'leri kirpar ve
-    nihai soru araliklerini doner.
-    
-    Returns: [[start1, end1], [start2, end2], ...] listesi
+    Ana fonksiyon: videoyu tarar, gecisleri bulur, hassas tarama yapar,
+    fade-in'leri kirpar ve nihai parca araliklarini doner.
+
+    KURAL 9 — donus tipi HER ZAMAN (questions, realistic_q_count).
+      questions: [[start1, end1], [start2, end2], ...]
     """
     duration = get_video_duration(video_path)
     if duration == 0:
         print(f"  [ERROR] {video_path} duration could not be read!")
-        return []
-    
-    # 1. Kaba tarama (1 FPS piksel fark analizi)
-    if expected_q_count is not None:
-        coarse, realistic_q_count = coarse_scan(video_path, expected_q_count)
-    else:
-        coarse = coarse_scan(video_path)
-    
-    # 2. Hassas tarama (10 FPS)
+        return [], 1
+
+    coarse, realistic_q_count = coarse_scan(video_path, expected_q_count)
     refined = refine_transitions(video_path, coarse, duration)
-    
-    # 3. Soru araliklerini olustur
     questions = build_questions(refined, duration)
-    
-    # 4. Fade-in kirpma
     questions = trim_fadeins(video_path, questions)
-    
-    # 5. Kisa parcalari birlestir
     questions = merge_overlaps(questions)
-    
+    questions = trim_final_fadeout(video_path, questions)
+
     print(f"  [RESULT] {len(questions)} parts created.")
-    
-    if expected_q_count is not None:
-        return questions, realistic_q_count
-    return questions
+    return questions, realistic_q_count
