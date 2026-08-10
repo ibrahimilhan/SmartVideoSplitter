@@ -28,9 +28,9 @@ While you sip your coffee; SVS's intelligent algorithm scans your video down to 
 
 * ⏱️ **Up to 10x Time Savings:** Reduces hours of manual cutting (Razor Blade spam) to mere minutes.
 * 🤖 **Algorithmic Precision:** It doesn't just look for "black" screens; it understands the dynamics of scene transitions (Threshold and Noise detection). It doesn't forgive even the slightest transitions that might escape your eye.
-* 💎 **Dual Cutting Engines:** 
-  * **Fast Mode (Lossless):** Never re-renders videos! Uses FFmpeg Stream Copy technology for razor-sharp cuts at lightning speed.
-  * **Precise Cut Mode:** Uses surgical re-encoding for millimeter-accurate transitions to prevent any keyframe bleed.
+* 💎 **Dual Cutting Engines:**
+  * **Precise Cut (default, recommended):** Frame-accurate re-encoding. Each part starts exactly at the content — no fade, no leftover from the previous part. Measured drift: **0.02s**.
+  * **Fast Mode (Lossless):** FFmpeg Stream Copy — no re-render at all, so it is near-instant. The trade-off is real: stream copy can only start at a keyframe, so each part carries up to one keyframe interval (**~5s** on typical 720p exports) of the previous part before the transition. Use it only when speed matters more than clean boundaries.
 * 🚀 **Hardware Acceleration (NVENC):** Unlock the full potential of your PC! Automatically detects **NVIDIA RTX/GTX** cards to render videos using the dedicated NVENC chip instead of the CPU. Enables instant cuts with zero CPU throttling. *(Requires NVIDIA Driver v610.00 or newer)*
 * ⚙️ **Dynamic CPU Analysis:** If you don't have an NVIDIA card, SVS automatically analyzes your CPU core count and provides optimized thread options (e.g., Background, Balanced, Max CPU) to prevent hardware strain.
 * 🔄 **Timestamp Protection:** The "video freezes at the beginning but audio plays" (negative timestamp) vulnerabilities, which are common in automatic cutting programs, are completely prevented by SVS's custom algorithm (`-avoid_negative_ts`).
