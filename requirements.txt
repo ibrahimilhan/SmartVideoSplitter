@@ -1,5 +1,10 @@
-opencv-python
-easyocr
-numpy
-tqdm
-tkinterdnd2
+# gui_app.py'nin gercekten ihtiyac duydugu paketler.
+# Ayrica sistemde FFmpeg kurulu ve PATH'te olmali (winget install Gyan.FFmpeg).
+
+numpy            # kare farki analizi (src/scanner.py)
+tkinterdnd2      # surukle-birak destegi
+Pillow           # banner gorseli (assets/banner.jpg)
+
+# NOT: easyocr ve opencv-python bilerek cikarildi — yalnizca artik
+# kullanilmayan src/ocr_mapper.py'de geciyorlardi ve ~2 GB indirme
+# maliyeti vardi. OCR isimlendirme geri gelirse tekrar eklenir.

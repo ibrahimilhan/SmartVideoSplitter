@@ -1,6 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Tarama sirasinda olusan gecici ham veri (1 GB+ olabilir)
 *.gray
+
+# Video girdi/ciktilari
 *.mp4
+Split_Videos/
+
+# Debug / hata ciktilari
+debug_svs.txt
+svs_error.log
+
+# Gorseller (assets/ haric — banner repoda tutulur)
 *.jpg
 *.png
-
-*.gray
+!assets/**
