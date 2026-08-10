@@ -362,6 +362,16 @@ class SmartVideoSplitterApp:
         )
         self.chk_precise.pack(side=tk.LEFT, padx=(0, 4))
         
+        self.var_gpu = tk.BooleanVar(value=False)
+        self.chk_gpu = tk.Checkbutton(
+            btn_frame, text="NVIDIA NVENC", variable=self.var_gpu,
+            bg=COLORS["bg_dark"], fg=COLORS["success"], font=self.font_body_bold,
+            selectcolor=COLORS["bg_card"], activebackground=COLORS["bg_dark"],
+            activeforeground=COLORS["accent"], state="disabled",
+            command=self._toggle_gpu
+        )
+        self.chk_gpu.pack(side=tk.LEFT, padx=(4, 8))
+        
         max_threads = os.cpu_count() or 4
         default_val = max_threads // 2 if max_threads >= 2 else 1
 
@@ -369,7 +379,7 @@ class SmartVideoSplitterApp:
         
         # Cyber-styled CPU Frame
         cpu_frame = tk.Frame(btn_frame, bg=COLORS["bg_card"], padx=8, pady=3)
-        cpu_frame.pack(side=tk.LEFT, padx=(12, 0))
+        cpu_frame.pack(side=tk.LEFT, padx=(0, 0))
         
         tk.Label(cpu_frame, text="CPU Threads:", font=self.font_small,
                  fg=COLORS["text_muted"], bg=COLORS["bg_card"]).pack(side=tk.LEFT, padx=(0, 6))
@@ -647,9 +657,26 @@ class SmartVideoSplitterApp:
 
     def _toggle_precise(self):
         if self.var_precise.get():
-            self.entry_speed.config(state="normal")
+            self.chk_gpu.config(state="normal")
+            if not self.var_gpu.get():
+                self.entry_speed.config(state="normal")
         else:
+            self.chk_gpu.config(state="disabled")
             self.entry_speed.config(state="disabled")
+            
+    def _toggle_gpu(self):
+        if self.var_gpu.get():
+            self.entry_speed.config(state="disabled")
+        else:
+            self.entry_speed.config(state="normal")
+            
+    def _check_nvidia_gpu(self):
+        try:
+            import subprocess
+            output = subprocess.check_output('wmic path win32_VideoController get name', shell=True, text=True, stderr=subprocess.DEVNULL)
+            return "nvidia" in output.lower()
+        except:
+            return False
 
     def _start_processing(self, videos_to_process):
         """Ortak islemi baslatan fonksiyon (surukle-birak ve butonlar icin)."""
@@ -658,15 +685,20 @@ class SmartVideoSplitterApp:
             return
             
         if self.var_precise.get():
-            try:
-                t_count = int(self.var_speed.get())
-                max_t = os.cpu_count() or 4
-                if t_count > max_t:
-                    messagebox.showerror("Hardware Limit Exceeded", f"Access Denied!\n\nSystem Analysis detected only {max_t} CPU Cores.\nYou cannot allocate {t_count} threads. This would crash the system.")
+            if self.var_gpu.get():
+                if not self._check_nvidia_gpu():
+                    messagebox.showerror("Hardware Unsupported", "Access Denied!\n\nYour computer does not support this feature. An NVIDIA graphics card (GTX/RTX) is required.\n\nPlease uncheck NVIDIA NVENC and use the CPU options instead.")
                     return
-            except ValueError:
-                messagebox.showerror("Invalid Input", "Please enter a valid number for threads.")
-                return
+            else:
+                try:
+                    t_count = int(self.var_speed.get())
+                    max_t = os.cpu_count() or 4
+                    if t_count > max_t:
+                        messagebox.showerror("Hardware Limit Exceeded", f"Access Denied!\n\nSystem Analysis detected only {max_t} CPU Cores.\nYou cannot allocate {t_count} threads. This would crash the system.")
+                        return
+                except ValueError:
+                    messagebox.showerror("Invalid Input", "Please enter a valid number for threads.")
+                    return
                 
         self._reset_ui()
             
@@ -695,7 +727,8 @@ class SmartVideoSplitterApp:
         
         is_precise = self.var_precise.get()
         speed_lvl = self.var_speed.get()
-        threading.Thread(target=self.run_process, args=(videos_to_process, output_dir, expected_q, is_precise, speed_lvl), daemon=True).start()
+        is_gpu = self.var_gpu.get()
+        threading.Thread(target=self.run_process, args=(videos_to_process, output_dir, expected_q, is_precise, speed_lvl, is_gpu), daemon=True).start()
 
     def open_folder(self, path):
         try:
@@ -764,10 +797,10 @@ class SmartVideoSplitterApp:
         if key in self.info_vars:
             self.info_vars[key].set(value)
 
-    def run_process(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)"):
+    def run_process(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False):
         self.is_processing = True
         try:
-            self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl)
+            self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl, is_gpu)
         except Exception as e:
             print(f"\n  [CRITICAL ERROR] An error occurred during processing: {e}")
             self.stat_status.set("❌ Error")
@@ -776,7 +809,7 @@ class SmartVideoSplitterApp:
             self.live_dot.configure(fg=COLORS["text_muted"])
             self._blink_active = False
             
-    def _run_process_inner(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)"):
+    def _run_process_inner(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False):
         total_questions = 0
         process_start = time.time()
         
@@ -876,7 +909,7 @@ class SmartVideoSplitterApp:
                 q_dur = end_time - start_time
                 q_num_str = f"{i+1:02d}_parca"
                 out_file = os.path.join(out_sub, f"{q_num_str}.mp4")
-                cut_video_segment(v, out_file, start_time, end_time, is_precise, speed_lvl)
+                cut_video_segment(v, out_file, start_time, end_time, is_precise, speed_lvl, is_gpu)
                 
             print(f"  ✓ {v_name} completed.")
             
