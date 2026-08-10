@@ -992,8 +992,11 @@ class SmartVideoSplitterApp:
         top.configure(bg=COLORS["bg_dark"])
         top.transient(self.root)
         
-        lbl_title = tk.Label(top, text="SYSTEM ARCHITECTURE & GUIDE", font=self.font_title, fg=COLORS["accent"], bg=COLORS["bg_dark"])
-        lbl_title.pack(pady=(20, 10))
+        header_frame = tk.Frame(top, bg=COLORS["bg_dark"])
+        header_frame.pack(fill=tk.X, pady=(20, 10), padx=20)
+        
+        lbl_title = tk.Label(header_frame, text="SYSTEM ARCHITECTURE & GUIDE", font=self.font_title, fg=COLORS["accent"], bg=COLORS["bg_dark"])
+        lbl_title.pack(side=tk.LEFT, expand=True)
         
         frame = tk.Frame(top, bg=COLORS["bg_dark"])
         frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
@@ -1006,7 +1009,7 @@ class SmartVideoSplitterApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         text_area.config(yscrollcommand=scrollbar.set)
         
-        guide_text = """
+        text_tr = """
 [1] ⚡ HIZLI MOD vs 🎯 HASSAS KESİM (PRECISE CUT)
 --------------------------------------------------
 SVS, iki farklı kesim motoru kullanır:
@@ -1027,8 +1030,51 @@ NVIDIA Ekran kartınız yoksa mecburen İşlemci (CPU) kullanmalısınız.
 • Örneğin testlerimizde, 16 çekirdek seçildiğinde render işlemi 5-6 dakika sürerken, 8 çekirdek seçildiğinde sadece 1 dakikada bitmiştir!
 • Tavsiye: Hız ve stabilitenin 'Altın Oranı' (Sweet Spot) için çekirdek sayısını programın varsayılan (Default) değerinde bırakın.
 """
-        text_area.insert(tk.END, guide_text.strip())
-        text_area.config(state=tk.DISABLED)
+        text_en = """
+[1] ⚡ FAST MODE vs 🎯 PRECISE CUT
+--------------------------------------------------
+SVS uses two different AI-assisted cutting engines:
+• Fast Mode (Precise Cut OFF): Uses FFmpeg Stream Copy. It literally copies and pastes the video data without re-encoding. A 2-hour video takes just 1 second. Zero quality loss.
+• Precise Mode (Precise Cut ON): Cuts on exact frames (millimeter precision) by re-encoding the video. Essential for strict cuts, but takes longer and requires hardware power.
+
+[2] 🚀 NVIDIA NVENC (Hardware Acceleration)
+--------------------------------------------------
+When checked, SVS bypasses your CPU entirely and sends the video data directly to your NVIDIA Graphics Card's dedicated SIP Core (NVENC).
+• Speed: Achieves 10x to 20x real-time rendering speed.
+• Thermals: Keeps your laptop cool and quiet.
+• Requirement: NVIDIA GTX/RTX GPU and Driver v610.00+.
+
+[3] ⚙️ CPU THREADS & AMDAHL'S LAW
+--------------------------------------------------
+If you don't have an NVIDIA GPU, you must use CPU processing.
+• Why not always use MAX?: Thanks to Amdahl's Law, giving FFmpeg too many threads causes 'Context Switching' and 'Thermal Throttling' on laptops.
+• For example, on some systems, 16 threads might take 6 minutes while 8 threads take only 1 minute!
+• Recommendation: Keep it at the default value (usually half your max cores) for the ultimate 'Sweet Spot' of speed and stability.
+"""
+        
+        current_state = {"lang": "TR"}
+        
+        def update_text(content):
+            text_area.config(state=tk.NORMAL)
+            text_area.delete(1.0, tk.END)
+            text_area.insert(tk.END, content.strip())
+            text_area.config(state=tk.DISABLED)
+            
+        def toggle_lang():
+            if current_state["lang"] == "TR":
+                current_state["lang"] = "EN"
+                btn_lang.config(text="🇹🇷 TR")
+                update_text(text_en)
+            else:
+                current_state["lang"] = "TR"
+                btn_lang.config(text="🇬🇧 EN")
+                update_text(text_tr)
+                
+        btn_lang = tk.Button(header_frame, text="🇬🇧 EN", font=self.font_body_bold, bg=COLORS["bg_card"], fg=COLORS["text_primary"], 
+                             relief=tk.FLAT, command=toggle_lang, cursor="hand2")
+        btn_lang.pack(side=tk.RIGHT)
+        
+        update_text(text_tr)
         
         CyberButton(top, text="CLOSE", command=top.destroy, 
                     bg_color=COLORS["accent"], hover_color=COLORS["accent_hover"], 
