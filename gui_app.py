@@ -1342,7 +1342,7 @@ class SmartVideoSplitterApp:
             video_start = time.time()
 
             if target_q:
-                cut_points, realistic_q = scan_and_build(v, target_q)
+                cut_points, realistic_q = scan_and_build(v, target_q, is_gpu)
 
                 # Uyumsuzluk kontrolu
                 if realistic_q != target_q:
@@ -1361,13 +1361,13 @@ class SmartVideoSplitterApp:
                     elif ans == "ai":
                         print(f"  [AUTO] Rescanning based on detected count: {realistic_q} parts...")
                         self._set_status(f"Rescanning {idx}/{len(videos)}")
-                        cut_points, _ = scan_and_build(v)
+                        cut_points, _ = scan_and_build(v, is_gpu=is_gpu)
                         target_q = realistic_q  # sadece bu videonun hedefi degisir
                     elif ans == "force":
                         print(f"  [FORCE] Video forcibly split into {target_q} parts.")
                         # mevcut cut_points oldugu gibi kalir
             else:
-                cut_points, _ = scan_and_build(v)
+                cut_points, _ = scan_and_build(v, is_gpu=is_gpu)
             
             if not cut_points or len(cut_points) <= 1:
                 print("  No transitions found, skipping.")

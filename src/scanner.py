@@ -79,9 +79,11 @@ def _gray_frames(args):
         proc.wait()
 
 
-def _ffmpeg_gray_args(video_path, fps, ss=None, t=None):
+def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False):
     """Gri ham kare uretimi icin ffmpeg argumanlari (stdout'a yazar)."""
     args = ["ffmpeg", "-nostdin", "-v", "error"]
+    if is_gpu:
+        args += ["-hwaccel", "cuda"]
     if ss is not None:
         args += ["-ss", f"{ss:.3f}"]
     if t is not None:
@@ -94,10 +96,10 @@ def _ffmpeg_gray_args(video_path, fps, ss=None, t=None):
     return args
 
 
-def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0):
+def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0, is_gpu=False):
     """(zaman, ardisik kare farki) ciftlerini akis halinde uretir."""
     prev = None
-    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t))):
+    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t, is_gpu=is_gpu))):
         cur = frame.astype(np.float32)
         if prev is not None:
             yield (t0 + i / fps, float(np.mean(np.abs(cur - prev))))
@@ -117,7 +119,7 @@ def get_video_duration(video_path: str) -> float:
         return 0.0
 
 
-def coarse_scan(video_path: str, expected_q_count: int = None):
+def coarse_scan(video_path: str, expected_q_count: int = None, is_gpu: bool = False):
     """
     Videoyu COARSE_FPS'e dusurup gri tonlamaya cevirir ve ardisik kareler
     arasindaki piksel farkindan gecis noktalarini (fade, sahne degisimi)
@@ -127,7 +129,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None):
     """
     print(f"  [SCAN] {os.path.basename(video_path)} - Rough scan started...")
 
-    diffs = list(_diff_stream(video_path, COARSE_FPS))
+    diffs = list(_diff_stream(video_path, COARSE_FPS, is_gpu=is_gpu))
     if not diffs:
         return [], 1
 
@@ -175,7 +177,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None):
     return inner, realistic_q_count
 
 
-def refine_transitions(video_path: str, coarse_transitions: list, duration: float) -> list:
+def refine_transitions(video_path: str, coarse_transitions: list, duration: float, is_gpu: bool = False) -> list:
     """
     Kaba taramada bulunan gecisleri FINE_FPS hassasiyetinde tekrar tarar ve
     her gecisin tam baslangic/bitis zamanini belirler.
@@ -195,7 +197,7 @@ def refine_transitions(video_path: str, coarse_transitions: list, duration: floa
         if win_duration > 0:
             exceeding = [
                 (t, d) for t, d in _diff_stream(
-                    video_path, FINE_FPS, ss=win_start, t=win_duration, t0=win_start
+                    video_path, FINE_FPS, ss=win_start, t=win_duration, t0=win_start, is_gpu=is_gpu
                 ) if d > DIFF_THRESHOLD
             ]
 
@@ -210,7 +212,7 @@ def refine_transitions(video_path: str, coarse_transitions: list, duration: floa
     return refined
 
 
-def trim_fadeins(video_path: str, questions: list) -> list:
+def trim_fadeins(video_path: str, questions: list, is_gpu: bool = False) -> list:
     """
     Her parcanin basindaki kararma efektini (fade-in) kirpar; boylece parca
     siyahlikla degil dogrudan icerikle baslar.
@@ -225,7 +227,7 @@ def trim_fadeins(video_path: str, questions: list) -> list:
         last_fade_time = 0.0
         first_bright_time = None
 
-        args = _ffmpeg_gray_args(video_path, FADE_FPS, ss=start, t=FADE_PROBE_SEC)
+        args = _ffmpeg_gray_args(video_path, FADE_FPS, ss=start, t=FADE_PROBE_SEC, is_gpu=is_gpu)
         for j, frame in enumerate(_gray_frames(args)):
             cur = frame.astype(np.float32)
 
@@ -254,7 +256,7 @@ def trim_fadeins(video_path: str, questions: list) -> list:
     return trimmed
 
 
-def trim_final_fadeout(video_path: str, questions: list) -> list:
+def trim_final_fadeout(video_path: str, questions: list, is_gpu: bool = False) -> list:
     """
     Son parcanin sonundaki kararmayi kirpar.
 
@@ -274,7 +276,7 @@ def trim_final_fadeout(video_path: str, questions: list) -> list:
     probe_start = end - window
     last_content = None
     for j, frame in enumerate(_gray_frames(
-            _ffmpeg_gray_args(video_path, FADE_FPS, ss=probe_start, t=window))):
+            _ffmpeg_gray_args(video_path, FADE_FPS, ss=probe_start, t=window, is_gpu=is_gpu))):
         if float(np.std(frame)) >= BLANK_STD:
             last_content = probe_start + j / FADE_FPS
 
@@ -337,7 +339,7 @@ def build_questions(refined: list, duration: float) -> list:
     return questions
 
 
-def scan_and_build(video_path: str, expected_q_count: int = None):
+def scan_and_build(video_path: str, expected_q_count: int = None, is_gpu: bool = False):
     """
     Ana fonksiyon: videoyu tarar, gecisleri bulur, hassas tarama yapar,
     fade-in'leri kirpar ve nihai parca araliklarini doner.
@@ -350,12 +352,12 @@ def scan_and_build(video_path: str, expected_q_count: int = None):
         print(f"  [ERROR] {video_path} duration could not be read!")
         return [], 1
 
-    coarse, realistic_q_count = coarse_scan(video_path, expected_q_count)
-    refined = refine_transitions(video_path, coarse, duration)
+    coarse, realistic_q_count = coarse_scan(video_path, expected_q_count, is_gpu)
+    refined = refine_transitions(video_path, coarse, duration, is_gpu)
     questions = build_questions(refined, duration)
-    questions = trim_fadeins(video_path, questions)
+    questions = trim_fadeins(video_path, questions, is_gpu)
     questions = merge_overlaps(questions)
-    questions = trim_final_fadeout(video_path, questions)
+    questions = trim_final_fadeout(video_path, questions, is_gpu)
 
     print(f"  [RESULT] {len(questions)} parts created.")
     return questions, realistic_q_count
