@@ -45,7 +45,7 @@ def _run_quiet(args):
     return result.stdout.decode("utf-8", errors="ignore")
 
 
-def _gray_frames(args):
+def _gray_frames(args, cancel_event=None):
     """
     ffmpeg'i PIPE ile calistirip gri kareleri tek tek uretir.
 
@@ -65,6 +65,8 @@ def _gray_frames(args):
     )
     try:
         while True:
+            if cancel_event and cancel_event.is_set():
+                break
             buf = proc.stdout.read(FRAME_SIZE)
             if buf is None or len(buf) < FRAME_SIZE:
                 break
@@ -74,12 +76,22 @@ def _gray_frames(args):
             proc.stdout.close()
         except Exception:
             pass
+            
+        is_cancelled = cancel_event and cancel_event.is_set()
+        killed_by_us = False
+        
         if proc.poll() is None:
             proc.kill()
-        proc.wait()
+            killed_by_us = True
+            
+        retcode = proc.wait()
+        
+        # Eger normal isleyis disinda coktuyse, iptal edilmediyse ve biz erken kapatmadiysak
+        if retcode != 0 and not is_cancelled and not killed_by_us:
+            raise RuntimeError(f"FFmpeg tarama motoru çöktü (Kod: {retcode}).\nEğer 'Use NVENC (GPU)' işaretliyse, ekran kartınız bunu desteklemiyor olabilir. Lütfen tiki kaldırıp CPU ile tekrar deneyin.")
 
 
-def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False):
+def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False, cancel_event=None):
     """Gri ham kare uretimi icin ffmpeg argumanlari (stdout'a yazar)."""
     args = ["ffmpeg", "-nostdin", "-v", "error"]
     if is_gpu:
@@ -96,10 +108,10 @@ def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False):
     return args
 
 
-def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0, is_gpu=False):
+def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0, is_gpu=False, cancel_event=None):
     """(zaman, ardisik kare farki) ciftlerini akis halinde uretir."""
     prev = None
-    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t, is_gpu=is_gpu))):
+    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t, is_gpu=is_gpu, cancel_event=cancel_event), cancel_event=cancel_event)):
         cur = frame.astype(np.float32)
         if prev is not None:
             yield (t0 + i / fps, float(np.mean(np.abs(cur - prev))))
@@ -119,7 +131,7 @@ def get_video_duration(video_path: str) -> float:
         return 0.0
 
 
-def coarse_scan(video_path: str, expected_q_count: int = None, is_gpu: bool = False):
+def coarse_scan(video_path: str, expected_q_count: int = None, is_gpu: bool = False, cancel_event=None):
     """
     Videoyu COARSE_FPS'e dusurup gri tonlamaya cevirir ve ardisik kareler
     arasindaki piksel farkindan gecis noktalarini (fade, sahne degisimi)
@@ -129,7 +141,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None, is_gpu: bool = Fa
     """
     print(f"  [SCAN] {os.path.basename(video_path)} - Rough scan started...")
 
-    diffs = list(_diff_stream(video_path, COARSE_FPS, is_gpu=is_gpu))
+    diffs = list(_diff_stream(video_path, COARSE_FPS, is_gpu=is_gpu, cancel_event=cancel_event))
     if not diffs:
         return [], 1
 
@@ -172,12 +184,14 @@ def coarse_scan(video_path: str, expected_q_count: int = None, is_gpu: bool = Fa
             inner.sort(key=lambda x: x[1], reverse=True)
             inner = inner[:expected_cuts]
             inner.sort(key=lambda x: x[0])
+        else:
+            inner = []
 
     print(f"  [SCAN] {len(inner)} transition points found.")
     return inner, realistic_q_count
 
 
-def refine_transitions(video_path: str, coarse_transitions: list, duration: float, is_gpu: bool = False) -> list:
+def refine_transitions(video_path: str, coarse_transitions: list, duration: float, is_gpu: bool = False, cancel_event=None) -> list:
     """
     Kaba taramada bulunan gecisleri FINE_FPS hassasiyetinde tekrar tarar ve
     her gecisin tam baslangic/bitis zamanini belirler.
@@ -197,7 +211,7 @@ def refine_transitions(video_path: str, coarse_transitions: list, duration: floa
         if win_duration > 0:
             exceeding = [
                 (t, d) for t, d in _diff_stream(
-                    video_path, FINE_FPS, ss=win_start, t=win_duration, t0=win_start, is_gpu=is_gpu
+                    video_path, FINE_FPS, ss=win_start, t=win_duration, t0=win_start, is_gpu=is_gpu, cancel_event=cancel_event
                 ) if d > DIFF_THRESHOLD
             ]
 
@@ -212,7 +226,7 @@ def refine_transitions(video_path: str, coarse_transitions: list, duration: floa
     return refined
 
 
-def trim_fadeins(video_path: str, questions: list, is_gpu: bool = False) -> list:
+def trim_fadeins(video_path: str, questions: list, is_gpu: bool = False, cancel_event=None) -> list:
     """
     Her parcanin basindaki kararma efektini (fade-in) kirpar; boylece parca
     siyahlikla degil dogrudan icerikle baslar.
@@ -227,8 +241,10 @@ def trim_fadeins(video_path: str, questions: list, is_gpu: bool = False) -> list
         last_fade_time = 0.0
         first_bright_time = None
 
-        args = _ffmpeg_gray_args(video_path, FADE_FPS, ss=start, t=FADE_PROBE_SEC, is_gpu=is_gpu)
-        for j, frame in enumerate(_gray_frames(args)):
+        # BUG FIX: Clamp probe time so it doesn't overshoot into the next segment
+        probe_window = min(FADE_PROBE_SEC, max(0.1, end - start))
+        args = _ffmpeg_gray_args(video_path, FADE_FPS, ss=start, t=probe_window, is_gpu=is_gpu, cancel_event=cancel_event)
+        for j, frame in enumerate(_gray_frames(args, cancel_event=cancel_event)):
             cur = frame.astype(np.float32)
 
             if j == 0:
@@ -256,7 +272,7 @@ def trim_fadeins(video_path: str, questions: list, is_gpu: bool = False) -> list
     return trimmed
 
 
-def trim_final_fadeout(video_path: str, questions: list, is_gpu: bool = False) -> list:
+def trim_final_fadeout(video_path: str, questions: list, is_gpu: bool = False, cancel_event=None) -> list:
     """
     Son parcanin sonundaki kararmayi kirpar.
 
@@ -276,7 +292,7 @@ def trim_final_fadeout(video_path: str, questions: list, is_gpu: bool = False) -
     probe_start = end - window
     last_content = None
     for j, frame in enumerate(_gray_frames(
-            _ffmpeg_gray_args(video_path, FADE_FPS, ss=probe_start, t=window, is_gpu=is_gpu))):
+            _ffmpeg_gray_args(video_path, FADE_FPS, ss=probe_start, t=window, is_gpu=is_gpu, cancel_event=cancel_event))):
         if float(np.std(frame)) >= BLANK_STD:
             last_content = probe_start + j / FADE_FPS
 
@@ -339,7 +355,7 @@ def build_questions(refined: list, duration: float) -> list:
     return questions
 
 
-def scan_and_build(video_path: str, expected_q_count: int = None, is_gpu: bool = False):
+def scan_and_build(video_path: str, expected_q_count: int = None, is_gpu: bool = False, cancel_event=None):
     """
     Ana fonksiyon: videoyu tarar, gecisleri bulur, hassas tarama yapar,
     fade-in'leri kirpar ve nihai parca araliklarini doner.
@@ -352,12 +368,18 @@ def scan_and_build(video_path: str, expected_q_count: int = None, is_gpu: bool =
         print(f"  [ERROR] {video_path} duration could not be read!")
         return [], 1
 
-    coarse, realistic_q_count = coarse_scan(video_path, expected_q_count, is_gpu)
-    refined = refine_transitions(video_path, coarse, duration, is_gpu)
+    coarse, realistic_q_count = coarse_scan(video_path, expected_q_count, is_gpu, cancel_event)
+    if cancel_event and cancel_event.is_set(): return [], 0
+    
+    refined = refine_transitions(video_path, coarse, duration, is_gpu, cancel_event)
+    if cancel_event and cancel_event.is_set(): return [], 0
+    
     questions = build_questions(refined, duration)
-    questions = trim_fadeins(video_path, questions, is_gpu)
+    questions = trim_fadeins(video_path, questions, is_gpu, cancel_event)
+    if cancel_event and cancel_event.is_set(): return [], 0
+    
     questions = merge_overlaps(questions)
-    questions = trim_final_fadeout(video_path, questions, is_gpu)
+    questions = trim_final_fadeout(video_path, questions, is_gpu, cancel_event)
 
     print(f"  [RESULT] {len(questions)} parts created.")
     return questions, realistic_q_count

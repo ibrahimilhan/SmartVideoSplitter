@@ -146,8 +146,8 @@ class CyberButton(tk.Canvas):
         
         self.create_polygon(points, fill=fill_color, outline=outline_color, width=1)
         
-        # Inner glow line simulation (top edge)
-        self.create_line(cut+2, 1, w-2, 1, fill="#ffffff", stipple="gray25")
+        # Inner glow line simulation (top edge) removed based on user request
+        pass
         
         y_offset = 1 if is_pressed else 0
         self.create_text(w/2, h/2 + y_offset, text=self.text, font=self.font, fill="white")
@@ -325,11 +325,27 @@ class CyberCard(tk.Canvas):
         ]
         self.create_polygon(points, fill=self.bg_color, outline="#314559", width=1)
         
-        # Top edge inner glow
-        self.create_line(cut+2, 3, w-4, 3, fill="#ffffff", stipple="gray25")
+        # Top edge inner glow removed based on user request
+        pass
 
 class SmartVideoSplitterApp:
+    
+    def _check_dependencies(self):
+        """Uygulama baslarken FFmpeg ve FFprobe'un yuklu olup olmadigini kontrol eder."""
+        try:
+            __import__('subprocess').run(["ffmpeg", "-version"], stdout=__import__('subprocess').DEVNULL, stderr=__import__('subprocess').DEVNULL, creationflags=__import__('subprocess').CREATE_NO_WINDOW)
+            __import__('subprocess').run(["ffprobe", "-version"], stdout=__import__('subprocess').DEVNULL, stderr=__import__('subprocess').DEVNULL, creationflags=__import__('subprocess').CREATE_NO_WINDOW)
+        except Exception:
+            __import__('tkinter').messagebox.showerror(
+                "CRITICAL ERROR - FFmpeg Missing", 
+                "FFmpeg is not installed or not added to your Windows PATH!\n\n"
+                "Smart Video Splitter CANNOT function without FFmpeg.\n"
+                "Please install FFmpeg, add it to system PATH, and restart the application."
+            )
+            # We don't exit here so they can at least see the UI, but it warns them.
+
     def __init__(self, root):
+        self._check_dependencies()
         self.root = root
         self.root.title("SmartVideoSplitter")
         self.root.configure(bg=COLORS["bg_dark"])
@@ -348,6 +364,7 @@ class SmartVideoSplitterApp:
         self._nvenc_ok = False
         self._nvenc_reason = None
         self._gpu_name = "unknown"
+        self.cancel_event = __import__('threading').Event()
         self.setup_fonts()
         self.setup_ui()
         # Precise Cut varsayilan acik geldigi icin bagli widget'lari
@@ -609,6 +626,13 @@ class SmartVideoSplitterApp:
             font=self.font_body_bold
         )
         self.chk_precise.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.var_normalize = tk.BooleanVar(value=True)
+        self.chk_normalize = CyberCheck(
+            opt_frame, text="Normalize Audio", variable=self.var_normalize,
+            accent=COLORS["accent"], font=self.font_body_bold
+        )
+        self.chk_normalize.pack(side=tk.LEFT, padx=(0, 10))
 
         self.var_gpu = tk.BooleanVar(value=False)
         self.chk_gpu = CyberCheck(
@@ -1183,7 +1207,8 @@ class SmartVideoSplitterApp:
         is_precise = self.var_precise.get()
         speed_lvl = self.var_speed.get()
         is_gpu = self.var_gpu.get()
-        threading.Thread(target=self.run_process, args=(videos_to_process, output_dir, expected_q, is_precise, speed_lvl, is_gpu), daemon=True).start()
+        norm_audio = self.var_normalize.get()
+        threading.Thread(target=self.run_process, args=(videos_to_process, output_dir, expected_q, is_precise, speed_lvl, is_gpu, norm_audio), daemon=True).start()
 
     def open_folder(self, path):
         """Cikti klasorunu isletim sisteminin dosya yoneticisinde ac."""
@@ -1261,10 +1286,10 @@ class SmartVideoSplitterApp:
         if key in self.info_vars:
             self._ui(self.info_vars[key].set, value)
 
-    def run_process(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False):
+    def run_process(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False, normalize_audio=False):
         self.is_processing = True
         try:
-            self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl, is_gpu)
+            self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl, is_gpu, normalize_audio)
         except Exception as e:
             # KURAL 6/7 — stdout ezili oldugu icin tam izi hem log'a hem diske yaz.
             err = traceback.format_exc()
@@ -1286,7 +1311,31 @@ class SmartVideoSplitterApp:
         except Exception:
             pass
             
-    def _run_process_inner(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False):
+    def _run_process_inner(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False, normalize_audio=False):
+        try:
+            self._run_process_inner_impl(videos, output_dir, expected_q, is_precise, speed_lvl, is_gpu, normalize_audio)
+        except Exception as e:
+            print(f"[CRASH ERROR] {e}")
+            self._set_status("❌ Error")
+            self._ui(lambda err=e: __import__('tkinter').messagebox.showerror("Fatal Error", f"An unexpected error occurred:\n{err}"))
+        finally:
+            
+            # Bilgisayari normal uyku moduna geri dondur
+            try:
+                __import__("ctypes").windll.kernel32.SetThreadExecutionState(0x80000000)
+            except:
+                pass
+
+            # Unlock valid buttons
+            try:
+                self._ui(self.btn_file.configure, state=__import__('tkinter').NORMAL)
+                self._ui(self.btn_folder.configure, state=__import__('tkinter').NORMAL)
+            except:
+                pass
+            self._blink_active = False
+            self._ui(self.live_dot.configure, fg="#444444") # COLORS["status_inactive"]
+
+    def _run_process_inner_impl(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False, normalize_audio=False):
         total_questions = 0     # tespit edilen parca
         total_written = 0       # diske gercekten yazilan
         total_failed = 0        # ffmpeg'in kesemedigi
@@ -1294,9 +1343,11 @@ class SmartVideoSplitterApp:
         
         # Toplam video suresini onceden hesapla (tahmini sure icin)
         total_duration = 0.0
+        video_durations = {}
         for v in videos:
             d, _, _ = self._get_video_meta(v)
             total_duration += d
+            video_durations[v] = d
         
         self._update_info("video_adi", f"{len(videos)} files")
         self._update_info("video_suresi", self._format_time(total_duration))
@@ -1315,13 +1366,31 @@ class SmartVideoSplitterApp:
         processed_duration = 0.0
         
         for idx, v in enumerate(videos, 1):
+            if self.cancel_event.is_set():
+                print("  [CANCELLED] Process stopped safely by user.")
+                break
             v_name = os.path.splitext(os.path.basename(v))[0]
-            out_sub = os.path.join(output_dir, v_name)
+            # Klasor isminden uzantiyi kaldir
+            v_name_clean = os.path.splitext(v_name)[0]
+            base_out_sub = os.path.join(output_dir, v_name_clean)
+            
+            # Ayni isimli baska video varsa uzerine yazmamak icin unique yap
+            out_sub = base_out_sub
+            counter = 1
+            while os.path.exists(out_sub):
+                out_sub = f"{base_out_sub} ({counter})"
+                counter += 1
+                
             os.makedirs(out_sub, exist_ok=True)
             
             # Video bilgilerini panele yaz
+            if not __import__('os').path.exists(v):
+                print(f"  [ERROR] File not found (deleted?): {v}")
+                total_failed += 1
+                total_duration -= video_durations.get(v, 0.0) # ETA'yi duzelt
+                continue
             vid_dur, vid_w, vid_h = self._get_video_meta(v)
-            vid_size = os.path.getsize(v)
+            vid_size = __import__('os').path.getsize(v)
             
             self._update_info("video_adi", v_name[:25])
             self._update_info("video_suresi", self._format_time(vid_dur))
@@ -1342,8 +1411,12 @@ class SmartVideoSplitterApp:
             video_start = time.time()
 
             if target_q:
-                cut_points, realistic_q = scan_and_build(v, target_q, is_gpu)
+                cut_points, realistic_q = scan_and_build(v, target_q, is_gpu, self.cancel_event)
 
+                if self.cancel_event.is_set():
+                    print("  [CANCELLED] Process stopped safely by user.")
+                    break
+                
                 # Uyumsuzluk kontrolu
                 if realistic_q != target_q:
                     print(f"  [WARNING] {target_q} parts requested but {realistic_q} realistic transitions detected.")
@@ -1357,17 +1430,23 @@ class SmartVideoSplitterApp:
 
                     if ans == "skip":
                         print(f"  [CANCELLED] Video skipped by user.")
+                        processed_duration += vid_dur
                         continue
                     elif ans == "ai":
                         print(f"  [AUTO] Rescanning based on detected count: {realistic_q} parts...")
                         self._set_status(f"Rescanning {idx}/{len(videos)}")
-                        cut_points, _ = scan_and_build(v, is_gpu=is_gpu)
+                        cut_points, _ = scan_and_build(v, is_gpu=is_gpu, cancel_event=self.cancel_event)
                         target_q = realistic_q  # sadece bu videonun hedefi degisir
                     elif ans == "force":
-                        print(f"  [FORCE] Video forcibly split into {target_q} parts.")
+                        actual_parts = len(cut_points) if cut_points else 0
+                        if actual_parts == target_q:
+                            print(f"  [FORCE] Video forcibly split into {target_q} parts.")
+                        else:
+                            print(f"  [FORCE] Could not find {target_q} parts. Forced to closest possible match: {actual_parts} parts.")
+                        target_q = actual_parts  # Update UI target to reflect reality
                         # mevcut cut_points oldugu gibi kalir
             else:
-                cut_points, _ = scan_and_build(v, is_gpu=is_gpu)
+                cut_points, _ = scan_and_build(v, is_gpu=is_gpu, cancel_event=self.cancel_event)
             
             if not cut_points or len(cut_points) <= 1:
                 print("  No transitions found, skipping.")
@@ -1392,10 +1471,14 @@ class SmartVideoSplitterApp:
             # "✅ Completed / N parca" gosterip bos klasor birakiyordu.
             written = failed = 0
             for i, (start_time, end_time) in enumerate(cut_points):
+                if self.cancel_event.is_set():
+                    print(f"  [CANCELLED] Stopping before starting part {i+1}...")
+                    break
                 q_num_str = f"{i+1:02d}_parca"
                 out_file = os.path.join(out_sub, f"{q_num_str}.mp4")
+                self._set_status(f"Cutting Part {i+1}/{q_count}")
                 if cut_video_segment(v, out_file, start_time, end_time,
-                                     is_precise, speed_lvl, is_gpu):
+                                     is_precise, speed_lvl, is_gpu, normalize_audio):
                     written += 1
                 else:
                     failed += 1

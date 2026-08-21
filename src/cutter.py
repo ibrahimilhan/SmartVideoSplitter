@@ -4,75 +4,62 @@ import os
 # Windows'ta her kesimde konsol penceresi yanip sonmesin.
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
 
-def cut_video_segment(input_path: str, output_path: str, start_time: float, end_time: float, precise: bool = False, speed_lvl: str = "Balanced (Medium)", is_gpu: bool = False) -> bool:
-    """
-    Cuts a segment from the input video and saves it to output_path.
-    If precise=True, re-encodes the segment for millimeter precision.
-    If precise=False, uses -c copy for lossless, lightning-fast cutting.
-    """
+def cut_video_segment(input_path: str, output_path: str, start_time: float, end_time: float, is_precise: bool = False, speed_preset: str = "Balanced (Medium)", is_gpu: bool = False, normalize_audio: bool = False) -> bool:
+    """Videodan belirtilen araligi keser (varsayilan olarak stream copy hiziyla)."""
     duration = end_time - start_time
-    
-    # Eger cikti dosyasi zaten varsa, uzerine yazmayip atla
-    if os.path.exists(output_path):
-        return True
+    if duration <= 0:
+        return False
         
-    if precise:
+    audio_args = ["-c:a", "aac", "-b:a", "128k", "-af", "dynaudnorm"] if normalize_audio else ["-c:a", "copy"]
+
+    try:
         if is_gpu:
             cmd = [
                 "ffmpeg", "-y",
+                "-hwaccel", "cuda",
                 "-ss", str(start_time),
                 "-i", input_path,
                 "-t", str(duration),
-                "-c:v", "h264_nvenc", "-preset", "fast",
-                "-c:a", "copy",
-                output_path
-            ]
+                "-c:v", "h264_nvenc", "-preset", "p4",
+                "-pix_fmt", "yuv420p"
+            ] + audio_args + [output_path]
         else:
-            try:
-                thread_count = str(int(speed_lvl.split(" ")[0]))
-            except:
-                thread_count = "4" # fallback
-                
-            # 0 means auto/max in FFmpeg, but we extracted exact counts now
-            if "Max" in speed_lvl:
-                thread_count = "0" 
-                
-            cmd = [
-                "ffmpeg", "-y",
-                "-ss", str(start_time),
-                "-i", input_path,
-                "-t", str(duration),
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18"
-            ]
-            
-            if thread_count != "0":
-                cmd.extend(["-threads", thread_count])
-                
-            cmd.extend([
-                "-c:a", "copy",
-                output_path
-            ])
-    else:
-        cmd = [
-            "ffmpeg", "-y",
-            "-ss", str(start_time),
-            "-i", input_path,
-            "-t", str(duration),
-            "-c", "copy",
-            "-avoid_negative_ts", "make_non_negative",
-            output_path
-        ]
-    
-    print(f"[FFMPEG] Cutting: {os.path.basename(output_path)} ({duration:.2f} seconds)")
-    
-    # KURAL 3/14 — ham byte al, errors='ignore' ile coz (Turkce dosya adlari).
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            creationflags=_NO_WINDOW)
+            preset_map = {
+                "Fast (Lower Quality)": "fast",
+                "Balanced (Medium)": "medium",
+                "High Quality (Slow)": "slow"
+            }
+            preset = preset_map.get(speed_preset, "medium")
 
-    if result.returncode != 0:
-        err = result.stderr.decode("utf-8", errors="ignore").strip()
-        last_line = err.splitlines()[-1] if err else "unknown error"
-        print(f"  [ERROR] Could not cut {os.path.basename(output_path)}: {last_line}")
+            if is_precise:
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(start_time),
+                    "-i", input_path,
+                    "-t", str(duration),
+                    "-c:v", "libx264",
+                    "-preset", preset,
+                    "-pix_fmt", "yuv420p"
+                ] + audio_args + [output_path]
+            else:
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(start_time),
+                    "-i", input_path,
+                    "-t", str(duration),
+                    "-c:v", "copy"
+                ] + audio_args + [output_path]
+
+        success = _run_quiet(cmd)
+        return success and os.path.exists(output_path) and os.path.getsize(output_path) > 1000
+    except Exception as e:
+        print(f"Error cutting segment: {e}")
         return False
 
-    return True
+def _run_quiet(cmd) -> bool:
+    """FFmpeg komutunu sessizce calistirir ve basariliysa True doner."""
+    try:
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=_NO_WINDOW, check=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
