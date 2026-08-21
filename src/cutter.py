@@ -13,7 +13,16 @@ def cut_video_segment(input_path: str, output_path: str, start_time: float, end_
     audio_args = ["-c:a", "aac", "-b:a", "128k", "-af", "dynaudnorm"] if normalize_audio else ["-c:a", "copy"]
 
     try:
-        if is_gpu:
+        if not is_precise:
+            # Eger hassas kesim kapaliysa, GPU/CPU fark etmez, kopyala gec (Inanilmaz hizli)
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_time),
+                "-i", input_path,
+                "-t", str(duration),
+                "-c:v", "copy"
+            ] + audio_args + [output_path]
+        elif is_gpu:
             cmd = [
                 "ffmpeg", "-y",
                 "-hwaccel", "cuda",
