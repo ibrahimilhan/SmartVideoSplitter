@@ -607,6 +607,14 @@ class SmartVideoSplitterApp:
                                font=self.font_body_bold, width=140, height=38)
         self.btn_cancel.pack(side=tk.LEFT, padx=(0, 16))
         
+        self.btn_pause = CyberButton(btn_frame, text="⏸ PAUSE", command=self._on_pause_click, 
+                               bg_color="#B8860B", hover_color="#DAA520", 
+                               font=self.font_body_bold, width=140, height=38)
+        self.btn_pause.pack(side=tk.LEFT, padx=(0, 16))
+        
+        self.is_paused = False
+        self.pause_start_time = 0
+        
         # Soru sayisi giris alani
         lbl_q = tk.Label(opt_frame, text="Expected Parts:", font=self.font_body_bold,
                          fg=COLORS["text_secondary"], bg=COLORS["bg_dark"])
@@ -954,6 +962,64 @@ class SmartVideoSplitterApp:
             
         # UI kilitlenmesini onlemek icin event handler'dan ciktiktan sonra baslat
         self.root.after(50, lambda v=videos_to_process: self._start_processing(v))
+
+    def _on_pause_click(self):
+        if not self.is_processing:
+            return
+            
+        import ctypes, subprocess
+        ntdll = ctypes.WinDLL('ntdll')
+        kernel32 = ctypes.WinDLL('kernel32')
+        PROCESS_ALL_ACCESS = 0x1F0FFF
+        my_pid = os.getpid()
+        
+        # O anki FFmpeg'leri bul
+        try:
+            out = subprocess.check_output('wmic process get ProcessId,ParentProcessId,Name', shell=True).decode(errors='ignore')
+            target_pids = []
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 3:
+                    name = parts[0].lower()
+                    try:
+                        ppid = int(parts[-2])
+                        pid = int(parts[-1])
+                        if (name == 'ffmpeg.exe' or name == 'ffprobe.exe') and ppid == my_pid:
+                            target_pids.append(pid)
+                    except:
+                        pass
+                        
+            if not self.is_paused:
+                # Pause
+                self.is_paused = True
+                self.pause_start_time = __import__('time').time()
+                for pid in target_pids:
+                    handle = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+                    if handle:
+                        ntdll.NtSuspendProcess(handle)
+                        kernel32.CloseHandle(handle)
+                self.btn_pause.delete("all")
+                self.btn_pause.text = "▶ RESUME"
+                self.btn_pause.draw_button(self.btn_pause.bg_color)
+                self._update_log("[SYSTEM] Processing PAUSED.", tag="warn")
+            else:
+                # Resume
+                self.is_paused = False
+                pause_duration = __import__('time').time() - self.pause_start_time
+                if hasattr(self, 'start_time'): self.start_time += pause_duration
+                if hasattr(self, '_last_update_time'): self._last_update_time += pause_duration
+                
+                for pid in target_pids:
+                    handle = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+                    if handle:
+                        ntdll.NtResumeProcess(handle)
+                        kernel32.CloseHandle(handle)
+                self.btn_pause.delete("all")
+                self.btn_pause.text = "⏸ PAUSE"
+                self.btn_pause.draw_button(self.btn_pause.bg_color)
+                self._update_log("[SYSTEM] Processing RESUMED.", tag="success")
+        except Exception as e:
+            print("Pause error:", e)
 
     def _on_cancel_click(self):
         if not self.is_processing:
