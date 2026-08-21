@@ -602,6 +602,11 @@ class SmartVideoSplitterApp:
                                font=self.font_body_bold, width=180, height=38)
         btn_folder.pack(side=tk.LEFT, padx=(0, 16))
         
+        self.btn_cancel = CyberButton(btn_frame, text="🛑 CANCEL", command=self._on_cancel_click, 
+                               bg_color="#8B0000", hover_color="#FF0000", 
+                               font=self.font_body_bold, width=140, height=38)
+        self.btn_cancel.pack(side=tk.LEFT, padx=(0, 16))
+        
         # Soru sayisi giris alani
         lbl_q = tk.Label(opt_frame, text="Expected Parts:", font=self.font_body_bold,
                          fg=COLORS["text_secondary"], bg=COLORS["bg_dark"])
@@ -949,6 +954,16 @@ class SmartVideoSplitterApp:
             
         # UI kilitlenmesini onlemek icin event handler'dan ciktiktan sonra baslat
         self.root.after(50, lambda v=videos_to_process: self._start_processing(v))
+
+    def _on_cancel_click(self):
+        if not self.is_processing:
+            __import__('tkinter').messagebox.showinfo("Bilgi", "Şu an devam eden bir işlem yok.")
+            return
+        if __import__('tkinter').messagebox.askyesno("İptal", "Devam eden işlemi durdurmak istiyor musunuz? (Bu biraz zaman alabilir)"):
+            self.cancel_event.set()
+            # We don't have text config exposed easily on CyberButton, so we just disable it visually
+            # Instead of changing text, we just print to log
+            self._update_log("[SYSTEM] Cancellation requested. Gracefully stopping FFmpeg...", tag="warn")
 
     def browse_files(self):
         """Dosya secme penceresiyle MP4 dosyalari sec."""
