@@ -91,11 +91,13 @@ def _gray_frames(args, cancel_event=None):
             raise RuntimeError(f"FFmpeg tarama motoru çöktü (Kod: {retcode}).\nEğer 'Use NVENC (GPU)' işaretliyse, ekran kartınız bunu desteklemiyor olabilir. Lütfen tiki kaldırıp CPU ile tekrar deneyin.")
 
 
-def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False, cancel_event=None):
+def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False, cancel_event=None, is_coarse=False):
     """Gri ham kare uretimi icin ffmpeg argumanlari (stdout'a yazar)."""
     args = ["ffmpeg", "-nostdin", "-v", "error"]
     if is_gpu:
         args += ["-hwaccel", "cuda"]
+    if is_coarse:
+        args += ["-skip_frame", "nokey"]
     if ss is not None:
         args += ["-ss", f"{ss:.3f}"]
     if t is not None:
@@ -108,10 +110,10 @@ def _ffmpeg_gray_args(video_path, fps, ss=None, t=None, is_gpu=False, cancel_eve
     return args
 
 
-def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0, is_gpu=False, cancel_event=None):
+def _diff_stream(video_path, fps, ss=None, t=None, t0=0.0, is_gpu=False, cancel_event=None, is_coarse=False):
     """(zaman, ardisik kare farki) ciftlerini akis halinde uretir."""
     prev = None
-    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t, is_gpu=is_gpu, cancel_event=cancel_event), cancel_event=cancel_event)):
+    for i, frame in enumerate(_gray_frames(_ffmpeg_gray_args(video_path, fps, ss, t, is_gpu=is_gpu, cancel_event=cancel_event, is_coarse=is_coarse), cancel_event=cancel_event)):
         cur = frame.astype(np.float32)
         if prev is not None:
             yield (t0 + i / fps, float(np.mean(np.abs(cur - prev))))
@@ -141,7 +143,7 @@ def coarse_scan(video_path: str, expected_q_count: int = None, is_gpu: bool = Fa
     """
     print(f"  [SCAN] {os.path.basename(video_path)} - Rough scan started...")
 
-    diffs = list(_diff_stream(video_path, COARSE_FPS, is_gpu=is_gpu, cancel_event=cancel_event))
+    diffs = list(_diff_stream(video_path, COARSE_FPS, is_gpu=is_gpu, cancel_event=cancel_event, is_coarse=True))
     if not diffs:
         return [], 1
 
