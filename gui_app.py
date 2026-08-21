@@ -592,25 +592,25 @@ class SmartVideoSplitterApp:
         opt_frame = tk.Frame(ctrl_area, bg=COLORS["bg_dark"])
         opt_frame.pack(fill=tk.X, pady=(10, 0))
 
-        btn_file = CyberButton(btn_frame, text="🎬 SELECT VIDEO FILE", command=self.browse_files, 
+        self.btn_file = CyberButton(btn_frame, text="🎬 SELECT VIDEO FILE", command=self.browse_files, 
                                bg_color=COLORS["accent2"], hover_color=COLORS["accent"], 
                                font=self.font_body_bold, width=200, height=38)
-        btn_file.pack(side=tk.LEFT, padx=(0, 16))
+        self.btn_file.pack(side=tk.LEFT, padx=(0, 16))
         
-        btn_folder = CyberButton(btn_frame, text="📁 SELECT FOLDER", command=self.browse_folder, 
+        self.btn_folder = CyberButton(btn_frame, text="📁 SELECT FOLDER", command=self.browse_folder, 
                                bg_color=COLORS["accent2"], hover_color=COLORS["accent"], 
                                font=self.font_body_bold, width=180, height=38)
-        btn_folder.pack(side=tk.LEFT, padx=(0, 16))
+        self.btn_folder.pack(side=tk.LEFT, padx=(0, 16))
         
         self.btn_cancel = CyberButton(btn_frame, text="🛑 CANCEL", command=self._on_cancel_click, 
                                bg_color="#8B0000", hover_color="#FF0000", 
                                font=self.font_body_bold, width=140, height=38)
-        self.btn_cancel.pack(side=tk.LEFT, padx=(0, 16))
+        
         
         self.btn_pause = CyberButton(btn_frame, text="⏸ PAUSE", command=self._on_pause_click, 
                                bg_color="#B8860B", hover_color="#DAA520", 
                                font=self.font_body_bold, width=140, height=38)
-        self.btn_pause.pack(side=tk.LEFT, padx=(0, 16))
+        
         
         self.is_paused = False
         self.pause_start_time = 0
@@ -1380,6 +1380,15 @@ class SmartVideoSplitterApp:
             self._set_status("❌ Error")
         finally:
             self.is_processing = False
+            self._ui(self.btn_cancel.pack_forget)
+            self._ui(self.btn_pause.pack_forget)
+            self._ui(self.btn_file.pack, side=__import__('tkinter').LEFT, padx=(0, 16))
+            self._ui(self.btn_folder.pack, side=__import__('tkinter').LEFT, padx=(0, 16))
+            if self.is_paused:
+                self.is_paused = False
+                self._ui(self.btn_pause.delete, "all")
+                self.btn_pause.text = "⏸ PAUSE"
+                self._ui(self.btn_pause.draw_button, self.btn_pause.bg_color)
             self._blink_active = False
             self._ui(self.live_dot.configure, fg=COLORS["text_muted"])
 
@@ -1407,12 +1416,21 @@ class SmartVideoSplitterApp:
             except:
                 pass
 
-            # Unlock valid buttons
+            # Hide pause/cancel and show select buttons
             try:
-                self._ui(self.btn_file.configure, state=__import__('tkinter').NORMAL)
-                self._ui(self.btn_folder.configure, state=__import__('tkinter').NORMAL)
-            except:
-                pass
+                self._ui(self.btn_cancel.pack_forget)
+                self._ui(self.btn_pause.pack_forget)
+                self._ui(self.btn_file.pack, side=__import__('tkinter').LEFT, padx=(0, 16))
+                self._ui(self.btn_folder.pack, side=__import__('tkinter').LEFT, padx=(0, 16))
+                
+                # Reset pause button state if it was paused
+                if self.is_paused:
+                    self.is_paused = False
+                    self._ui(self.btn_pause.delete, "all")
+                    self.btn_pause.text = "⏸ PAUSE"
+                    self._ui(self.btn_pause.draw_button, self.btn_pause.bg_color)
+            except Exception as e:
+                print(e)
             self._blink_active = False
             self._ui(self.live_dot.configure, fg="#444444") # COLORS["status_inactive"]
 
