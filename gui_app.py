@@ -1001,7 +1001,7 @@ class SmartVideoSplitterApp:
                 self.btn_pause.delete("all")
                 self.btn_pause.text = "▶ RESUME"
                 self.btn_pause.draw_button(self.btn_pause.bg_color)
-                self._update_log("[SYSTEM] Processing PAUSED.", tag="warn")
+                print("[SYSTEM] Processing PAUSED.")
             else:
                 # Resume
                 self.is_paused = False
@@ -1017,7 +1017,7 @@ class SmartVideoSplitterApp:
                 self.btn_pause.delete("all")
                 self.btn_pause.text = "⏸ PAUSE"
                 self.btn_pause.draw_button(self.btn_pause.bg_color)
-                self._update_log("[SYSTEM] Processing RESUMED.", tag="success")
+                print("[SYSTEM] Processing RESUMED.")
         except Exception as e:
             print("Pause error:", e)
 
@@ -1029,7 +1029,7 @@ class SmartVideoSplitterApp:
             self.cancel_event.set()
             # We don't have text config exposed easily on CyberButton, so we just disable it visually
             # Instead of changing text, we just print to log
-            self._update_log("[SYSTEM] Cancellation requested. Gracefully stopping FFmpeg...", tag="warn")
+            print("[SYSTEM] Cancellation requested. Gracefully stopping FFmpeg...")
 
     def browse_files(self):
         """Dosya secme penceresiyle MP4 dosyalari sec."""
