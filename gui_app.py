@@ -1368,6 +1368,11 @@ class SmartVideoSplitterApp:
             self._ui(self.info_vars[key].set, value)
 
     def run_process(self, videos, output_dir, expected_q=None, is_precise=False, speed_lvl="Balanced (Medium)", is_gpu=False, normalize_audio=False):
+        self._ui(self.btn_file.pack_forget)
+        self._ui(self.btn_folder.pack_forget)
+        self._ui(self.btn_cancel.pack, side=__import__('tkinter').LEFT, padx=(0, 16))
+        self._ui(self.btn_pause.pack, side=__import__('tkinter').LEFT, padx=(0, 16))
+        
         self.is_processing = True
         try:
             self._run_process_inner(videos, output_dir, expected_q, is_precise, speed_lvl, is_gpu, normalize_audio)
